@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  kiibot:
+    build: .
+    container_name: kiibot_engine
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - kiibot_data:/root/.kiibot
+      - ./configs/ai_keys.json:/app/configs/ai_keys.json:ro
+
+volumes:
+  kiibot_data:

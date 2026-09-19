@@ -1,0 +1,52 @@
+# KIIBOT Default Configuration
+# These values are overridden by ~/.kiibot/config/config.yaml
+
+verbose: false
+color: true
+editor: nano
+pager: less
+
+# Security
+authorized_targets:
+  - "127.0.0.1"
+  - "localhost"
+  - "::1"
+require_confirmation_for_remote: true
+max_timeout: 600
+
+# Modules
+modules:
+  web: true
+  crypto: true
+  forensics: true
+  pwn: true
+  reverse: true
+  stego: true
+  network: true
+  osint: true
+  logs: true
+  blue_team: true
+  red_lab: true
+  malware_lab: true
+
+# AI Integration
+ai:
+  provider: local
+  endpoint: "http://127.0.0.1:11434"
+  model: "llama3"
+  api_key: ""
+  timeout: 120
+  enabled: false
+
+# Offline Mode
+offline:
+  enabled: false
+  local_wordlists: "/usr/share/wordlists"
+  disable_network_tools: true
+
+# Competition Mode
+competition:
+  name: ""
+  flag_format: "FLAG{.*}"
+  team: ""
+  duration_minutes: 0

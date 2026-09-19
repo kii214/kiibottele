@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# Direct bash wrapper for KIIBOT when running from source checkout
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+export PYTHONPATH="$SCRIPT_DIR/src:${PYTHONPATH}"
+
+if [ -f "$HOME/.kiibot/venv/bin/python" ]; then
+    exec "$HOME/.kiibot/venv/bin/python" -m kiibot.cli.main "$@"
+elif command -v python3 &>/dev/null; then
+    exec python3 -m kiibot.cli.main "$@"
+else
+    echo "Error: Python 3 not found."
+    exit 1
+fi

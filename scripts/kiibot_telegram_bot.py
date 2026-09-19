@@ -1,0 +1,1172 @@
+"""
+KIIBOT Telegram Bot — Enhanced Cyber SOC & CTF Assistant
+Dilengkapi Context Guardrail (Hanya merespon topik CTF & SOC),
+Rich HTML UI Formatting, Interactive Buttons, dan Integrasi MITRE ATT&CK.
+"""
+
+import asyncio
+import html
+import logging
+import os
+import re
+import sys
+
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram.ext import (
+    Application,
+    CallbackQueryHandler,
+    CommandHandler,
+    ContextTypes,
+    MessageHandler,
+    filters,
+)
+
+# Tambahkan src/ ke sys.path agar impor kiibot berjalan lancar
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src')))
+
+from kiibot.analysis.decoders import decode_all
+from kiibot.analysis.log_analyzer import DeepLogAnalyzer
+from kiibot.analysis.mitre_attack import get_all_techniques, lookup_mitre
+from kiibot.analysis.pcap_analyzer import ProfessionalPCAPAnalyzer
+from kiibot.core.ai_orchestrator import AIOrchestrator
+from kiibot.core.executor import check_all_tools_availability, execute_concurrent_tools
+from kiibot.core.tool_registry import TOOL_REGISTRY
+
+# Setup Logging
+logging.basicConfig(
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    level=logging.INFO
+)
+logger = logging.getLogger("kiibot_bot")
+
+BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "GANTI_DENGAN_TOKEN_ANDA")
+ALLOWED_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "GANTI_DENGAN_CHAT_ID_ANDA")
+
+
+def check_auth(update: Update) -> bool:
+    """Keamanan: Pastikan pesan berasal dari chat ID yang diizinkan (jika diset)."""
+    if not update.effective_chat:
+        return False
+    chat_id = str(update.effective_chat.id)
+    if ALLOWED_CHAT_ID != "GANTI_DENGAN_CHAT_ID_ANDA" and chat_id != ALLOWED_CHAT_ID:
+        logger.warning(f"[SECURITY] Akses ditolak dari unauthorized Chat ID: {chat_id}")
+        return False
+    return True
+
+
+# =====================================================================
+# CONTEXT GUARDRAIL: PEMBATAS KONTEKS CTF & SOC
+# Aturan: Hanya proses pesan yang relevan. Di luar konteks JANGAN DIBALAS.
+# =====================================================================
+
+CYBER_KEYWORDS = [
+    # CTF & Security General
+    "ctf", "flag", "kiibot", "exploit", "vulnerability", "vuln", "cve", "pwn",
+    "reverse", "reversing", "forensic", "forensik", "stego", "steganography",
+    "payload", "shell", "rce", "sqli", "xss", "csrf", "ssrf", "lfi", "rfi",
+    "malware", "ransomware", "trojan", "backdoor", "rootkit", "sandbox",
+    
+    # SOC & Blue Team
+    "soc", "siem", "triage", "incident", "alert", "log", "logs", "wazuh", "splunk",
+    "elk", "elastic", "suricata", "snort", "firewall", "waf", "ids", "ips", "edr",
+    "mitre", "attack", "technique", "tactic", "threat", "actor", "apc", "apt",
+    "containment", "mitigasi", "mitigation", "severity", "critical", "escalation",
+    "pcap", "wireshark", "tshark", "tcpdump", "traffic", "packet", "beaconing",
+    "brute", "bruteforce", "login", "auth", "authentikasi", "access",
+    
+    # Kriptografi & Decoding
+    "hash", "md5", "sha1", "sha256", "sha512", "base64", "hex", "rot13", "caesar",
+    "cipher", "crypto", "kripto", "rsa", "aes", "des", "xor", "jwt", "token",
+    "decode", "encode", "decrypt", "encrypt", "password", "wordlist", "rockyou",
+    
+    # Binaries & Reversing
+    "elf", "binary", "executable", "pe", "checksec", "ghidra", "ida", "gdb",
+    "radare2", "rop", "buffer overflow", "assembly", "disassembly", "opcode",
+    
+    # OSINT & Recon
+    "osint", "whois", "dns", "subdomain", "nmap", "gobuster", "dirbuster",
+    "nikto", "trufflehog", "gitleaks", "credential", "leak", "github"
+]
+
+def is_cyber_soc_context(text: str) -> bool:
+    """
+    Evaluasi ketat: Apakah teks berkaitan dengan CTF, SOC, atau Keamanan Siber?
+    Jika bernilai False, bot TIDAK AKAN MEMBALAS pesan tersebut.
+    """
+    if not text:
+        return False
+    
+    cleaned = text.strip().lower()
+    
+    # 1. Cek Pola Flag Format
+    if re.search(r"(ctf|kiibot|flag|picoctf|hackthebox|thm)\{.*?\}", cleaned, re.IGNORECASE):
+        return True
+    
+    # 2. Cek Pola Hash / Cipher / Encoding Khas
+    # MD5 (32 hex), SHA1 (40 hex), SHA256 (64 hex)
+    if re.fullmatch(r"[a-fA-F0-9]{32}|[a-fA-F0-9]{40}|[a-fA-F0-9]{64}", text.strip()):
+        return True
+    
+    # Base64 string panjang yang valid
+    if len(text.strip()) >= 16 and re.fullmatch(r"[A-Za-z0-9+/=]+", text.strip()):
+        return True
+    
+    # 3. Cek Pola Teknis: IP Address, CVE, MITRE ID, Log Line
+    if re.search(r"\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b", text):
+        return True
+    if re.search(r"\bCVE-\d{4}-\d{4,7}\b", text, re.IGNORECASE):
+        return True
+    if re.search(r"\bT\d{4}(\.\d{3})?\b", text, re.IGNORECASE):
+        return True
+    if re.search(r"(GET|POST|PUT|DELETE)\s+\/[a-zA-Z0-9_\-\.\/]*\s+HTTP\/", text):
+        return True
+    if re.search(r"(\bor\b|\band\b)\s+['\"0-9a-zA-Z]+\s*=\s*['\"0-9a-zA-Z]+", cleaned):
+        return True
+    
+    # 4. Cek Keyword Relevansi Cyber / CTF / SOC
+    for kw in CYBER_KEYWORDS:
+        # Gunakan word boundary atau substring fleksibel
+        if kw in cleaned:
+            return True
+            
+    return False
+
+
+# =====================================================================
+# UI HELPERS & KEYBOARDS
+# =====================================================================
+
+def get_main_keyboard() -> InlineKeyboardMarkup:
+    """Membuat tombol aksi cepat interaktif."""
+    keyboard = [
+        [
+            InlineKeyboardButton("[ SOC Workflow ]", callback_data="btn_soc"),
+            InlineKeyboardButton("[ Triage Simulator ]", callback_data="btn_triage"),
+        ],
+        [
+            InlineKeyboardButton("[ MITRE ATT&CK ]", callback_data="btn_mitre_list"),
+            InlineKeyboardButton("[ Tools Registry ]", callback_data="btn_tools"),
+        ],
+        [
+            InlineKeyboardButton("[ VPS Doctor ]", callback_data="btn_doctor"),
+            InlineKeyboardButton("[ AI Keys Pool ]", callback_data="btn_aikeys"),
+        ],
+        [
+            InlineKeyboardButton("[ Bantuan & Command ]", callback_data="btn_help"),
+        ]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+
+# =====================================================================
+# COMMAND HANDLERS
+# =====================================================================
+
+async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Menampilkan sambutan eksklusif bergaya SOC Cyber Command Center."""
+    if not check_auth(update) or not update.message:
+        return
+
+    welcome_text = (
+        "<b>[ KIIBOT SOC & CTF ENGINE ]</b>\n"
+        "<code>STATUS: ONLINE | ENGINE: READY</code>\n\n"
+        "Halo, Operator. Saya adalah asisten analitik siber untuk memecahkan tantangan "
+        "Jeopardy CTF dan menganalisis insiden SOC Blue Team.\n\n"
+        "<b>[ Fungsi Tersedia ]</b>\n"
+        "» <b>Forensics & Stego:</b> Analisis PCAP, Memory Dump, EXIF, Magic Bytes\n"
+        "» <b>Multi-Decoder:</b> Identifikasi Base64, Hex, ROT13/47, JWT, XOR, MD5/SHA\n"
+        "» <b>SOC Incident Triage:</b> Prioritas alert L1/L2 & Rekomendasi Mitigasi\n"
+        "» <b>MITRE ATT&CK:</b> Mapping teknik taktis dan deteksi SIEM\n"
+        "» <b>AI Pool Failover:</b> Diagnostik ketersediaan AI API Keys\n"
+        "» <b>VPS Diagnostics:</b> Cek kesehatan 40+ tools via <code>/doctor</code>\n\n"
+        "Kirimkan artefak siber (PCAP, ELF, PNG, Log, Ciphertext) untuk memulai analisis."
+    )
+    await update.message.reply_text(
+        welcome_text,
+        parse_mode="HTML",
+        reply_markup=get_main_keyboard()
+    )
+
+
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Menampilkan panduan command KIIBOT lengkap."""
+    if not check_auth(update) or not update.message:
+        return
+
+    help_text = (
+        "<b>[ KIIBOT COMMAND REFERENCE ]</b>\n\n"
+        "<b>» Navigasi & SOC Operations</b>\n"
+        "  <code>/start</code>  : Menampilkan menu utama & status\n"
+        "  <code>/help</code>   : Daftar referensi perintah ini\n"
+        "  <code>/soc</code>    : Panduan 4 tahap alur kerja SOC Analyst\n"
+        "  <code>/triage</code> : Simulator insiden alert & penentuan prioritas\n"
+        "  <code>/tools</code>  : Ringkasan 40+ CTF & SOC tools yang terpasang\n"
+        "  <code>/doctor</code> : Diagnosa tools VPS (cek yang terinstall vs missing)\n"
+        "  <code>/aikeys</code> : Cek status cascading Multi-API Keys Pool\n\n"
+        "<b>» Investigasi & Auto-Solve</b>\n"
+        "  <code>/mitre [ID]</code>  : Detail teknik MITRE (contoh: <code>/mitre T1140</code>)\n"
+        "  <code>/decode [txt]</code>: Analisis instan cipher/hash/JWT/encoding\n"
+        "  <code>/analyze [..]</code>: Deep analysis AI expert bertubi-tubi\n\n"
+        "<b>» Analisis Berkas Langsung</b>\n"
+        "Kirim dokumen langsung ke bot (<code>.pcap</code>, <code>.png</code>, <code>.elf</code>, <code>.log</code>).\n"
+        "Bot akan otomatis mengorkestrasi tools secara paralel.\n\n"
+        "<i>Catatan: Bot dilindungi guardrail aktif. Pesan di luar konteks siber akan diabaikan.</i>"
+    )
+    await update.message.reply_text(
+        help_text,
+        parse_mode="HTML",
+        reply_markup=get_main_keyboard()
+    )
+
+
+async def report_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Generate dan kirim laporan CTF dalam format PDF."""
+    if not check_auth(update) or not update.message:
+        return
+
+    from kiibot.ctf.report_generator import CTFReportGenerator
+    from kiibot.ctf.session_manager import CTFSessionManager
+    
+    status_msg = await update.message.reply_text(
+        "📄 <i>Sedang mengumpulkan data session dan menyusun laporan PDF...</i>",
+        parse_mode="HTML"
+    )
+
+    try:
+        sm = CTFSessionManager()
+        sess = sm.get_active_session()
+        
+        # Jika tidak ada session aktif, coba ambil session terbaru yang sudah selesai
+        if not sess:
+            sessions = sm.list_sessions()
+            if not sessions:
+                await status_msg.edit_text("❌ <b>Tidak ada data session CTF yang ditemukan.</b>", parse_mode="HTML")
+                return
+            sess = sessions[0]
+            await status_msg.edit_text(
+                f"⚠️ <i>Tidak ada session aktif. Menggunakan session terbaru (SESSION-{sess.id:03d}). Menyusun laporan PDF...</i>",
+                parse_mode="HTML"
+            )
+
+        rg = CTFReportGenerator()
+        pdf_path = rg.generate_pdf(sess.id)
+        
+        await status_msg.edit_text("✅ <b>Laporan PDF berhasil dibuat! Mengirim dokumen...</b>", parse_mode="HTML")
+        
+        # Kirim dokumen PDF
+        with open(pdf_path, 'rb') as doc:
+            await update.message.reply_document(
+                document=doc,
+                filename=os.path.basename(pdf_path),
+                caption=f"Laporan CTF Attack & Defense - SESSION-{sess.id:03d}\nKompetisi: {sess.competition or 'N/A'}"
+            )
+            
+    except Exception as e:
+        logger.error(f"Error pada /report: {e}")
+        await status_msg.edit_text(f"❌ <b>Error saat generate laporan:</b> <code>{html.escape(str(e))}</code>", parse_mode="HTML")
+
+
+async def doctor_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Diagnosa kesiapan seluruh tools di VPS."""
+    if not check_auth(update) or not update.message:
+        return
+
+    status_msg = await update.message.reply_text(
+        "🩺 <i>Memeriksa ketersediaan seluruh tools di lingkungan host/VPS...</i>",
+        parse_mode="HTML"
+    )
+
+    try:
+        report = check_all_tools_availability()
+        installed_count = report["installed_count"]
+        missing_count = report["missing_count"]
+        total = report["total_tools"]
+        installed_pct = int((installed_count / total) * 100) if total > 0 else 0
+
+        reply = (
+            "<b>[ VPS DIAGNOSTICS REPORT ]</b>\n"
+            f"<code>SYSTEM HEALTH: {installed_count}/{total} TOOLS ({installed_pct}% READY)</code>\n\n"
+        )
+
+        # Kelompokkan berdasarkan kategori
+        for cat, cat_data in report["categories"].items():
+            cat_installed = cat_data["installed"]
+            cat_missing = cat_data["missing"]
+            icon = "+" if not cat_missing else ("~" if cat_installed else "-")
+            reply += f"<b>[ CATEGORY: {cat.upper()} ]</b>\n"
+            if cat_installed:
+                reply += f"+ Installed : {', '.join(cat_installed[:6])}\n"
+            if cat_missing:
+                reply += f"- Missing   : {', '.join(cat_missing[:4])}\n"
+            reply += "\n"
+
+        if missing_count > 0:
+            reply += "<i>Untuk menginstall tools yang hilang, jalankan: <code>bash scripts/install_all_tools.sh</code> di VPS.</i>"
+
+        await status_msg.edit_text(reply, parse_mode="HTML")
+
+    except Exception as e:
+        logger.error(f"Error pada /doctor: {e}")
+        await status_msg.edit_text(f"❌ Error saat menjalankan diagnosis: {e!s}")
+
+
+async def aikeys_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Menampilkan status pool cascading multi-API key."""
+    if not check_auth(update) or not update.message:
+        return
+
+    ai = AIOrchestrator()
+    status = ai.get_status_info()
+    total = status["total_keys"]
+    active = status["active_key_index"]
+    exhausted = status["exhausted_keys_count"]
+    model = status["model"]
+    avail = status["available"]
+
+    badge = "ACTIVE & READY" if avail else "INACTIVE / QUOTA EXHAUSTED"
+
+    reply = (
+        "<b>[ AI MULTI-KEY POOL STATUS ]</b>\n"
+        f"<code>STATUS: {badge}</code>\n\n"
+        f"» <b>Model          :</b> {model}\n"
+        f"» <b>Total API Keys :</b> {total} Keys\n"
+        f"» <b>Active Key     :</b> Key #{active}\n"
+        f"» <b>Exhausted Keys :</b> {exhausted} Keys\n"
+        f"» <b>Remaining Keys :</b> {status['remaining_keys']} Keys\n\n"
+        "<b>[ Cascading Failover Protocol ]</b>\n"
+        "- KIIBOT selalu menggunakan Key pertama yang aktif.\n"
+        "- Jika Key error (429/insufficient quota), sistem beralih otomatis ke Key berikutnya.\n"
+        "- Maksimal 10 Keys didukung secara paralel.\n\n"
+        "<i>Konfigurasi keys: <code>configs/ai_keys.json</code></i>"
+    )
+    await update.message.reply_text(reply, parse_mode="HTML")
+
+
+async def soc_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Menampilkan ringkasan alur kerja SOC Analyst."""
+    if not check_auth(update) or not update.message:
+        return
+
+    soc_text = (
+        "<b>[ SOC ANALYST WORKFLOW ]</b>\n"
+        "<i>Metodologi: CTF as a Gateway to SOC</i>\n\n"
+        "<b>1. Triage & Assessment (L1):</b>\n"
+        "Memilah alert berdasarkan severity (CRITICAL, HIGH, MEDIUM, LOW) untuk mencegah alert fatigue.\n\n"
+        "<b>2. Root Cause Investigation (L2):</b>\n"
+        "Menyisir raw logs, traffic PCAP, atau memory dump untuk menemukan payload & IoC penyerang.\n\n"
+        "<b>3. Containment & Mitigation:</b>\n"
+        "Melakukan isolasi ancaman (blokir IP, isolasi host, update WAF).\n\n"
+        "<b>4. Hardening & Rule Update:</b>\n"
+        "Membuat deteksi preventif baru di SIEM agar serangan tidak berulang."
+    )
+    await update.message.reply_text(soc_text, parse_mode="HTML")
+
+
+async def triage_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Simulator Triage Alert SOC."""
+    if not check_auth(update) or not update.message:
+        return
+
+    triage_text = (
+        "<b>[ SOC ALERT TRIAGE SIMULATOR ]</b>\n"
+        "Ditemukan 4 alert bersamaan pada SIEM Dashboard:\n\n"
+        "[CRITICAL] Outbound Traffic Anomaly\n"
+        "» Source : Database Server (Production)\n"
+        "» Action : Prioritas Utama! Segera blokir koneksi keluar & isolasi DB.\n\n"
+        "[HIGH] SQL Injection Payload\n"
+        "» Source : Public Web Application\n"
+        "» Action : Cek response status code di Nginx log; pastikan WAF memblokir payload.\n\n"
+        "[MEDIUM] Multiple Failed Logins\n"
+        "» Source : Workstation HRD\n"
+        "» Action : Potensi brute-force. Monitor lockout policy.\n\n"
+        "[LOW] Malware Dropper Quarantined\n"
+        "» Source : Laptop Marketing\n"
+        "» Action : Ancaman sudah tertahan (contained). Verifikasi status karantina.\n\n"
+        "<i>SOP L2: Selesaikan investigasi status CRITICAL sebelum berpindah ke severity lebih rendah.</i>"
+    )
+    await update.message.reply_text(triage_text, parse_mode="HTML")
+
+
+async def tools_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Menampilkan daftar kategori tools yang terintegrasi di KIIBOT."""
+    if not check_auth(update) or not update.message:
+        return
+
+    tools_summary = "<b>[ KIIBOT TOOL REGISTRY ]</b>\n\n"
+    
+    for category, tools_dict in TOOL_REGISTRY.items():
+        tool_names = ", ".join([f"{name}" for name in list(tools_dict.keys())[:5]])
+        tools_summary += f"<b>» {category.upper()}:</b>\n  {tool_names}\n\n"
+        
+    tools_summary += "<i>Tools ini dieksekusi secara otomatis saat menerima artefak terkait.</i>"
+    await update.message.reply_text(tools_summary, parse_mode="HTML")
+
+
+async def mitre_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Lookup teknik MITRE ATT&CK dari database knowledge base."""
+    if not check_auth(update) or not update.message:
+        return
+
+    if not context.args:
+        avail = ", ".join([f"<code>{t}</code>" for t in get_all_techniques()[:8]])
+        usage_text = (
+            "⚠️ <b>Format Perintah Salah!</b>\n\n"
+            "Gunakan: <code>/mitre &lt;Technique_ID&gt;</code>\n"
+            f"Contoh ID yang tersedia: {avail}, dll."
+        )
+        await update.message.reply_text(usage_text, parse_mode="HTML")
+        return
+
+    tech_id = context.args[0].upper().strip()
+    data = lookup_mitre(tech_id)
+
+    if not data:
+        await update.message.reply_text(
+            f"❌ <b>ID MITRE <code>{html.escape(tech_id)}</code> tidak ditemukan dalam database lokal.</b>\n"
+            f"Gunakan ID umum seperti <code>T1140</code>, <code>T1059</code>, <code>T1027.003</code>, <code>T1190</code>.",
+            parse_mode="HTML"
+        )
+        return
+
+    reply = (
+        f"┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓\n"
+        f"┃  🎯 <b>MITRE ATT&CK: {html.escape(data['id'])}</b>\n"
+        f"┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛\n\n"
+        f"🏷️ <b>Nama:</b> <b>{html.escape(data['name'])}</b>\n"
+        f"⚔️ <b>Tactic:</b> <code>{html.escape(data['tactic'])}</code>\n\n"
+        f"📝 <b>Deskripsi:</b>\n{html.escape(data['desc'])}\n\n"
+        f"🔍 <b>Deteksi SIEM:</b>\n<code>{html.escape(data['detection'])}</code>\n\n"
+        f"🛡️ <b>Mitigasi SOC:</b>\n{html.escape(data['mitigation'])}\n\n"
+        f"🧰 <b>Tools KIIBOT Terkait:</b>\n"
+        f"{', '.join([f'<code>{t}</code>' for t in data['related_tools']])}"
+    )
+    await update.message.reply_text(reply, parse_mode="HTML")
+
+
+async def decode_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Melakukan auto-decode pada string ciphertext."""
+    if not check_auth(update) or not update.message:
+        return
+
+    if not context.args:
+        await update.message.reply_text(
+            "⚠️ Gunakan format: <code>/decode &lt;teks_cipher_atau_hash&gt;</code>",
+            parse_mode="HTML"
+        )
+        return
+
+    text = " ".join(context.args)
+    results = decode_all(text)
+
+    if not results:
+        await update.message.reply_text(
+            f"❌ <b>Tidak ditemukan pola encoding/cipher yang dikenali untuk:</b>\n<code>{html.escape(text[:100])}</code>",
+            parse_mode="HTML"
+        )
+        return
+
+    reply = "<b>[ MULTI-STAGE DECODE RESULTS ]</b>\n\n"
+    for res in results:
+        rtype = html.escape(str(res.get("type", "Unknown")))
+        rval = html.escape(str(res.get("result", "")))
+        reply += f"🔹 <b>{rtype}:</b>\n<code>{rval}</code>\n\n"
+
+    # Periksa apakah ada flag terdeteksi
+    flag_match = re.search(r"(KIIBOT|CTF|FLAG|SOC)\{[^\}]+\}", reply, re.IGNORECASE)
+    if flag_match:
+        reply += f"\n<b>[ POTENSI FLAG DITEMUKAN ]</b>\n<b>{flag_match.group(0)}</b>"
+
+    await update.message.reply_text(reply, parse_mode="HTML")
+
+
+async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    /analyze <teks> — Analisis mendalam teks CTF/SOC dengan AI Expert.
+    Menjalankan decode + analisis payload + AI SOC secara bersamaan.
+    """
+    if not check_auth(update) or not update.message:
+        return
+
+    if not context.args:
+        await update.message.reply_text(
+            "⚠️ <b>Format:</b> <code>/analyze &lt;payload/CVE/soal/hash/teks&gt;</code>\n\n"
+            "<i>Contoh:</i>\n"
+            "• <code>/analyze CVE-2021-44228</code>\n"
+            "• <code>/analyze ' OR 1=1 -- -</code>\n"
+            "• <code>/analyze aGVsbG8gd29ybGQ=</code>",
+            parse_mode="HTML"
+        )
+        return
+
+    text = " ".join(context.args)
+
+    # Guardrail: pastikan teks relevan
+    if not is_cyber_soc_context(text):
+        logger.info(f"[GUARDRAIL DROP /analyze] Teks di luar konteks: {text[:40]}")
+        return
+
+    status_msg = await update.message.reply_text(
+        "<b>[ DEEP ANALYSIS ENGINE ]</b>\n"
+        "<code>Menjalankan decoder, scanner, dan AI secara paralel...</code>",
+        parse_mode="HTML"
+    )
+
+    try:
+        # Jalankan decode dan AI secara paralel
+        decode_task = asyncio.get_event_loop().run_in_executor(None, decode_all, text)
+        ai = AIOrchestrator()
+
+        sys_prompt = (
+            "Anda adalah Principal Security Researcher, Expert CTF Solver, dan Senior SOC L3 Analyst.\n"
+            "Tugas: Analisis teks/payload/string yang diberikan secara mendalam dan profesional.\n\n"
+            "Berikan laporan MARKDOWN dengan format:\n"
+            "1. 🎯 **KLASIFIKASI**: Jenis ancaman/soal/payload (SQLi, XSS, LFI, CVE, Hash, Crypto, dsb.)\n"
+            "2. 🔍 **ANALISIS TEKNIS MENDALAM**: Bedah cara kerja, sub-teknik, dan potensi dampak.\n"
+            "3. 🛠️ **TOOLS & PERINTAH EXACT VPS**: Command siap pakai di VPS Linux untuk investigasi/eksploitasi.\n"
+            "4. ⚡ **LANGKAH SOLUSI / EKSPLOITASI**: Urutan tindakan konkret untuk menyelesaikan soal atau insiden.\n"
+            "5. 🛡️ **MITRE ATT&CK & MITIGASI SOC**: Teknik MITRE, deteksi SIEM, dan rekomendasi pencegahan.\n\n"
+            "ATURAN MUTLAK: DILARANG KERAS MENGARANG, MENGHALUSINASIKAN, ATAU BERASUMSI. "
+            "Hanya buat pernyataan berdasarkan fakta teknis yang nyata."
+        )
+
+        # Jalankan AI analysis
+        ai_task = ai.ask_ai(user_question=f"Analisis teks CTF/SOC ini secara mendalam:\n\n```\n{text}\n```", system_prompt=sys_prompt) if ai.is_available() else None
+
+        # Dapatkan hasil decode
+        decode_results = await asyncio.get_event_loop().run_in_executor(None, decode_all, text)
+
+        decode_section = ""
+        if decode_results:
+            decode_section = "\n<b>[ Auto-Decode Results ]</b>\n"
+            for r in decode_results[:5]:
+                dtype = html.escape(str(r.get("type", "")))
+                dval = html.escape(str(r.get("result", ""))[:200])
+                decode_section += f"» <b>{dtype}:</b> <code>{dval}</code>\n"
+
+        # Cek flag di decode results
+        flag_found = ""
+        for r in decode_results:
+            flag_m = re.search(r"(KIIBOT|CTF|FLAG|SOC|WORKSHOP)\{[^\}]+\}", str(r.get("result", "")), re.IGNORECASE)
+            if flag_m:
+                flag_found = flag_m.group(0)
+                break
+
+        if ai_task:
+            ai_report = await ai_task
+        if ai_task:
+            ai_report = await ai_task
+            full_reply = (
+                f"<b>[ DEEP ANALYSIS REPORT ]</b>\n"
+                f"🔎 <b>Input:</b> <code>{html.escape(text[:100])}</code>\n"
+            )
+            if flag_found:
+                full_reply += f"\n<b>[ FLAG DITEMUKAN ]</b> <b>{html.escape(flag_found)}</b>\n"
+            if decode_section:
+                await status_msg.edit_text(full_reply + decode_section + "\n<i>AI sedang menyusun laporan mendalam...</i>", parse_mode="HTML")
+            await status_msg.edit_text(full_reply + f"\n{ai_report}", parse_mode="Markdown")
+        else:
+            simple_reply = (
+                f"<b>[ DECODE ANALYSIS RESULT ]</b>\n"
+                f"🔎 <b>Input:</b> <code>{html.escape(text[:100])}</code>\n"
+            )
+            if flag_found:
+                simple_reply += f"\n<b>[ FLAG ]</b> <b>{html.escape(flag_found)}</b>\n"
+            simple_reply += decode_section or "\n<i>Tidak ada encoding yang dikenali.</i>"
+            simple_reply += "\n\n<i>Note: AI tidak aktif — isi configs/ai_keys.json untuk analisis mendalam.</i>"
+            await status_msg.edit_text(simple_reply, parse_mode="HTML")
+
+    except Exception as e:
+        logger.error(f"Error /analyze: {e}")
+        await status_msg.edit_text(f"❌ <b>Error analisis:</b> <code>{html.escape(str(e))}</code>", parse_mode="HTML")
+
+
+# =====================================================================
+# CALLBACK QUERY HANDLER (UNTUK TOMBOL INTERAKTIF)
+# =====================================================================
+
+async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Menangani interaksi klik tombol keyboard."""
+    query = update.callback_query
+    if not query:
+        return
+
+    await query.answer()
+
+    data = query.data
+    if data == "btn_soc":
+        soc_text = (
+            "🛡️ <b>SOC Analyst Workflow (Blue Team):</b>\n\n"
+            "1. <b>Triage:</b> Identifikasi tingkat bahaya alert (Gunakan /triage).\n"
+            "2. <b>Investigasi Log:</b> Sisir raw logs untuk menemukan Root Cause.\n"
+            "3. <b>Mitigasi:</b> Containment ancaman (contoh: blokir IP di WAF).\n"
+            "4. <b>Resolusi:</b> Susun rules pertahanan baru (contoh: update SIEM)."
+        )
+        await query.message.reply_text(soc_text, parse_mode="HTML")
+
+    elif data == "btn_triage":
+        await triage_command(update, context)
+
+    elif data == "btn_mitre_list":
+        avail = ", ".join([f"<code>{t}</code>" for t in get_all_techniques()])
+        await query.message.reply_text(
+            f"📚 <b>Daftar Teknik MITRE ATT&CK yang Tersedia:</b>\n\n{avail}\n\n"
+            f"Gunakan <code>/mitre &lt;ID&gt;</code> (misal: <code>/mitre T1140</code>) untuk melihat detil teknik dan mitigasi.",
+            parse_mode="HTML"
+        )
+
+    elif data == "btn_tools":
+        await tools_command(update, context)
+
+    elif data == "btn_doctor":
+        await doctor_command(update, context)
+
+    elif data == "btn_aikeys":
+        await aikeys_command(update, context)
+
+    elif data == "btn_help":
+        await help_command(update, context)
+
+
+# =====================================================================
+# MESSAGE HANDLERS DENGAN CONTEXT GUARDRAIL
+# =====================================================================
+
+async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Menangani pesan teks biasa.
+    GUARDRAIL: Jika di luar konteks CTF & SOC -> JANGAN DIBALAS (Silent drop).
+    """
+    if not check_auth(update) or not update.message:
+        return
+
+    text = update.message.text
+    if not text:
+        return
+
+    # PEMBATAS KONTEKS (GUARDRAIL)
+    if not is_cyber_soc_context(text):
+        logger.info(f"[GUARDRAIL DROP] Pesan di luar konteks diabaikan (tidak dibalas): {text[:50]}")
+        # DI LUAR KONTEKS: JANGAN DI BALES (Sesuai instruksi pengguna)
+        return
+
+    logger.info(f"[IN-CONTEXT] Memproses pesan: {text[:50]}")
+
+    # 1. Coba decode terlebih dahulu jika tampak seperti cipher/hash/base64
+    clean_strip = text.strip()
+    looks_like_encoded = (
+        re.fullmatch(r"[a-fA-F0-9]{32}|[a-fA-F0-9]{40}|[a-fA-F0-9]{64}", clean_strip) or
+        (len(clean_strip) >= 12 and re.fullmatch(r"[A-Za-z0-9+/=]+", clean_strip) and " " not in clean_strip) or
+        clean_strip.startswith("0x") or
+        re.search(r"(ctf|kiibot|flag)\{", clean_strip, re.IGNORECASE)
+    )
+
+    if looks_like_encoded:
+        context.args = clean_strip.split()
+        await decode_command(update, context)
+        return
+
+    # 2. Cek apakah teks merupakan cuplikan file log (misal Nginx/Apache/SIEM logs)
+    is_log_snippet = (
+        re.search(r"\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b", text) and
+        re.search(r"(GET|POST|PUT|DELETE|HTTP/|\[\d{2}/[A-Za-z]{3}/\d{4})", text)
+    )
+
+    if is_log_snippet:
+        status_msg = await update.message.reply_text(
+            "<b>[ CONCURRENT LOG BATTERY ]</b>\n"
+            "<code>Mengeksekusi 9 tools investigasi log & beaconing secara paralel...</code>",
+            parse_mode="HTML"
+        )
+        try:
+            analyzer = DeepLogAnalyzer(log_content=text)
+            battery_results = await analyzer.run_concurrent_battery()
+            
+            suspect_ip = battery_results["top_ips"].get("suspect_attacker_ip") or "Tidak terdeteksi"
+            sqli_count = len(battery_results["sqli_findings"])
+            xss_count = len(battery_results["xss_findings"])
+            rce_count = len(battery_results["rce_findings"])
+            lfi_count = len(battery_results["lfi_findings"])
+            scanners = ", ".join(battery_results["user_agents"].get("scanners_found", [])) or "None"
+            flags = battery_results.get("flags_found", [])
+            
+            beaconing = battery_results.get("beaconing", {})
+            beacon_suspects = beaconing.get("beaconing_suspects", [])
+            beacon_count = len(beacon_suspects)
+
+            summary_text = (
+                "<b>[ LOG ANALYSIS REPORT ]</b>\n"
+                f"<code>CONTEXT: Web Attack & Incident Investigation</code>\n\n"
+                f"» <b>Attacker Suspect :</b> {html.escape(suspect_ip)}\n"
+                f"» <b>Known Scanners   :</b> {html.escape(scanners)}\n\n"
+                "<b>[ Attack Indications ]</b>\n"
+                f"- SQL Injection      : {sqli_count} hits\n"
+                f"- XSS Payload        : {xss_count} hits\n"
+                f"- RCE / Command Inj  : {rce_count} hits\n"
+                f"- LFI / Traversal    : {lfi_count} hits\n"
+                f"- C2 Beacon Suspects : {beacon_count} IPs\n\n"
+            )
+
+            if flags:
+                summary_text += f"🚩 <b>FLAG DETECTED :</b> <b>{html.escape(', '.join(flags))}</b>\n\n"
+
+            ai = AIOrchestrator()
+            if ai.is_available():
+                await status_msg.edit_text(summary_text + "<i>Menyusun mitigasi SOC taktis dengan AI...</i>", parse_mode="HTML")
+                ai_report = await ai.analyze_results(battery_results, previous_context="Analisis Cuplikan Log Web Serentak")
+                await status_msg.edit_text(f"{summary_text}\n<b>[ AI SOC Mitigation Report ]</b>\n\n{ai_report}", parse_mode="Markdown")
+            else:
+                await status_msg.edit_text(summary_text, parse_mode="HTML")
+            return
+        except Exception as e:
+            logger.error(f"Gagal menjalankan log battery: {e}")
+            await status_msg.edit_text(f"❌ Error saat analisis log: {e!s}")
+            return
+
+    # 3. Jika merupakan teks pertanyaan konseptual / analisa SOC umum:
+    ai = AIOrchestrator()
+    if ai.is_available():
+        status_info = ai.get_status_info()
+        curr_key = status_info.get("active_key_index", 1)
+        status_msg = await update.message.reply_text(
+            f"🧠 <i>Menganalisis query dengan AI SOC Engine (Key #{curr_key})...</i>",
+            parse_mode="HTML"
+        )
+        try:
+            from kiibot.ctf.report_generator import CTFReportGenerator
+            from kiibot.ctf.session_manager import CTFSessionManager
+            
+            ctf_context = ""
+            try:
+                sm = CTFSessionManager()
+                sess = sm.get_active_session()
+                if not sess:
+                    sessions = sm.list_sessions()
+                    if sessions:
+                        sess = sessions[0]
+                
+                if sess:
+                    rg = CTFReportGenerator()
+                    md_report = rg.generate_markdown(sess.id)
+                    ctf_context = (
+                        f"\n\n[KONTEKS DATA CTF / SOC SAAT INI (SESSION-{sess.id:03d})]:\n"
+                        f"{md_report}\n\n"
+                        "Gunakan informasi dari laporan CTF di atas untuk menjawab pertanyaan jika relevan dengan laporan."
+                    )
+            except Exception as e:
+                logger.warning(f"Gagal mengambil konteks CTF: {e}")
+
+            sys_prompt = (
+                "Anda adalah Senior SOC Analyst & CTF Solver (Blue Team). "
+                "Jawablah dengan profesional, terstruktur, dan taktis. "
+                "Jelaskan konsep soal, tools yang tepat di VPS, langkah penyelesaian, dan rekomendasi mitigasi SOC."
+            ) + ctf_context
+            
+            ai_reply = await ai.ask_ai(user_question=text, system_prompt=sys_prompt)
+            await status_msg.edit_text(ai_reply, parse_mode="Markdown")
+        except Exception as e:
+            logger.error(f"AI response error: {e}")
+            await status_msg.edit_text(f"❌ <b>Error AI Pool:</b> <code>{html.escape(str(e))}</code>", parse_mode="HTML")
+    else:
+        results = decode_all(text)
+        if results:
+            context.args = text.split()
+            await decode_command(update, context)
+        else:
+            await update.message.reply_text(
+                "🛡️ <b>KIIBOT Cyber Assistant:</b>\n"
+                "Query Anda teridentifikasi dalam domain siber/SOC, namun seluruh API Key AI sedang tidak aktif atau habis kuotanya.\n\n"
+                "<i>💡 Cek status pool dengan <code>/aikeys</code> atau isi 10 API Key Anda di <code>configs/ai_keys.json</code>.</i>",
+                parse_mode="HTML"
+            )
+
+
+async def _send_raw_results(update: Update, title: str, results_dict: dict, base_path: str):
+    """Membantu mengirimkan file teks mentah hasil eksekusi tools."""
+    import json
+    raw_path = f"{base_path}_raw_output.txt"
+    with open(raw_path, "w", encoding="utf-8") as f:
+        f.write(f"=== {title} ===\n\n")
+        for k, v in results_dict.items():
+            f.write(f"--- TOOL: {k} ---\n")
+            if isinstance(v, (dict, list)):
+                f.write(json.dumps(v, indent=2))
+            else:
+                f.write(str(v))
+            f.write("\n\n")
+    
+    with open(raw_path, "rb") as doc:
+        await update.message.reply_document(
+            document=doc,
+            caption=f"⚙️ <b>Raw Tools Output:</b> {html.escape(title)}",
+            parse_mode="HTML"
+        )
+
+
+async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Menangani pengiriman file/dokumen.
+    Jika file log: Jalankan DeepLogAnalyzer secara serentak bertubi-tubi.
+    Jika PCAP/Binary/Archive: Orkestrasi 5-10 tools paralel.
+    """
+    if not check_auth(update) or not update.message or not update.message.document:
+        return
+
+    document = update.message.document
+    file_id = document.file_id
+    file_name = document.file_name or "unknown_file"
+
+    status_card = await update.message.reply_text(
+        f"<b>[ RECEIVING ARTIFACT ]</b>\n"
+        f"» <b>File:</b> <code>{html.escape(file_name)}</code>\n"
+        f"<code>STATUS: [1/3] Mengunduh berkas...</code>",
+        parse_mode="HTML"
+    )
+
+    try:
+        new_file = await context.bot.get_file(file_id)
+        os.makedirs("temp_ctf", exist_ok=True)
+        file_path = os.path.join("temp_ctf", file_name)
+        await new_file.download_to_drive(file_path)
+
+        # Cek apakah ini file log
+        is_log_file = (
+            file_name.lower().endswith((".log", ".txt", ".csv")) or
+            "access" in file_name.lower() or
+            "nginx" in file_name.lower() or
+            "apache" in file_name.lower()
+        )
+
+        if is_log_file:
+            await status_card.edit_text(
+                f"<b>[ CONCURRENT LOG BATTERY ]</b>\n"
+                f"» <b>File:</b> <code>{html.escape(file_name)}</code>\n"
+                f"<code>STATUS: [2/3] Mengeksekusi 9 tools log & beaconing...</code>",
+                parse_mode="HTML"
+            )
+
+            analyzer = DeepLogAnalyzer(file_path=file_path)
+            # Jalankan log battery dan tools external di VPS secara simultan
+            log_battery_task = analyzer.run_concurrent_battery()
+            vps_tools_task = execute_concurrent_tools(["awk_top_ip", "grep_ip", "grep_sqli", "grep_xss", "grep_useragent"], file_path)
+
+            battery_results, vps_results = await asyncio.gather(log_battery_task, vps_tools_task)
+
+            suspect_ip = battery_results["top_ips"].get("suspect_attacker_ip") or "Tidak terdeteksi"
+            scanners = ", ".join(battery_results["user_agents"].get("scanners_found", [])) or "None"
+            flags = battery_results.get("flags_found", [])
+            beacon_suspects = battery_results.get("beaconing", {}).get("beaconing_suspects", [])
+            beacon_count = len(beacon_suspects)
+
+            await status_card.edit_text(
+                f"<b>[ AI INCIDENT REPORTING ]</b>\n"
+                f"» <b>File:</b> <code>{html.escape(file_name)}</code>\n"
+                f"» <b>Suspect IP:</b> <code>{html.escape(suspect_ip)}</code>\n"
+                f"» <b>Scanner   :</b> <code>{html.escape(scanners)}</code>\n"
+                f"» <b>Beaconing :</b> <code>{beacon_count} suspects</code>\n\n"
+                f"<code>STATUS: [3/3] Menyusun laporan temuan & mitigasi SOC...</code>",
+                parse_mode="HTML"
+            )
+
+            aggregated_results = {
+                "native_log_battery": battery_results,
+                "vps_tools_output": vps_results
+            }
+
+            ai = AIOrchestrator()
+            final_report = await ai.analyze_results(
+                aggregated_results,
+                previous_context=f"Analisis Log Serentak: {file_name}. Attacker Suspect: {suspect_ip}, Beaconing: {beacon_count}, Flags: {flags}"
+            )
+
+            full_reply = (
+                f"<b>[ LOG ANALYSIS REPORT ]</b>\n"
+                f"<code>CONTEXT: Incident Response</code>\n\n"
+                f"» <b>Attacker Suspect :</b> {html.escape(suspect_ip)}\n"
+                f"» <b>Known Scanners   :</b> {html.escape(scanners)}\n"
+                f"» <b>C2 Beaconing     :</b> {beacon_count} IPs\n\n"
+            )
+            if flags:
+                full_reply += f"🚩 <b>FLAG DETECTED:</b> <b>{html.escape(', '.join(flags))}</b>\n\n"
+
+            full_reply += f"\n{final_report}"
+
+            if len(full_reply) > 3800:
+                report_path = f"{file_path}_report.md"
+                with open(report_path, "w", encoding="utf-8") as f:
+                    f.write(full_reply)
+                await update.message.reply_document(
+                    document=open(report_path, "rb"),
+                    caption=f"📋 <b>Laporan Analisis Log Bertubi-tubi ({html.escape(file_name)})</b>",
+                    parse_mode="HTML"
+                )
+            else:
+                await update.message.reply_text(full_reply, parse_mode="Markdown")
+                
+            all_raw = {"Log Battery": battery_results, "VPS Tools": vps_results}
+            await _send_raw_results(update, "Log Analysis Results", all_raw, file_path)
+            return
+
+        # Cek apakah ini file PCAP / Network Traffic Capture
+        is_pcap_file = file_name.lower().endswith((".pcap", ".pcapng", ".cap"))
+
+        if is_pcap_file:
+            await status_card.edit_text(
+                f"<b>[ EXPERT WIRESHARK BATTERY ]</b>\n"
+                f"» <b>File:</b> <code>{html.escape(file_name)}</code>\n"
+                f"<code>STATUS: [2/3] Mengeksekusi 11 tools Wireshark/tshark/TLS/SSH serentak...</code>",
+                parse_mode="HTML"
+            )
+
+            pcap_analyzer = ProfessionalPCAPAnalyzer(file_path)
+            pcap_battery_results = await pcap_analyzer.run_expert_pcap_battery()
+
+            dns_count = len(pcap_battery_results.get("dns_queries", []))
+            http_count = len(pcap_battery_results.get("http_traffic", []))
+            creds_count = len(pcap_battery_results.get("credentials", []))
+            tls_count = len(pcap_battery_results.get("tls_sni", []))
+            ssh_count = len(pcap_battery_results.get("ssh_banners", []))
+            flags = pcap_battery_results.get("flags_found", [])
+
+            await status_card.edit_text(
+                f"<b>[ SYNTHESIZING NETWORK INTEL ]</b>\n"
+                f"» <b>File:</b> <code>{html.escape(file_name)}</code>\n"
+                f"» <b>HTTP Streams:</b> <code>{http_count} streams</code>\n"
+                f"» <b>DNS Queries :</b> <code>{dns_count} domains</code>\n"
+                f"» <b>TLS Domains :</b> <code>{tls_count} domains</code>\n"
+                f"» <b>Credentials :</b> <code>{creds_count} captured</code>\n\n"
+                f"<code>STATUS: [3/3] AI menyusun laporan forensik jaringan profesional...</code>",
+                parse_mode="HTML"
+            )
+
+            ai = AIOrchestrator()
+            final_report = await ai.analyze_results(
+                pcap_battery_results,
+                previous_context=f"Analisis PCAP Expert Wireshark: {file_name}. TLS SNI: {tls_count}, SSH: {ssh_count}, Flags: {flags}"
+            )
+
+            full_reply = (
+                f"<b>[ EXPERT WIRESHARK ANALYSIS ]</b>\n"
+                f"<code>CONTEXT: Network Forensics & Packet Analysis</code>\n\n"
+                f"» <b>HTTP Sessions   :</b> {http_count} sessions\n"
+                f"» <b>DNS Queries     :</b> {dns_count} queries\n"
+                f"» <b>TLS SNI Domains :</b> {tls_count} domains\n"
+                f"» <b>SSH Banners     :</b> {ssh_count} captured\n"
+            )
+            if flags:
+                full_reply += f"🚩 <b>FLAG DETECTED :</b> <b>{html.escape(', '.join(flags))}</b>\n\n"
+
+            full_reply += f"\n{final_report}"
+
+            if len(full_reply) > 3800:
+                report_path = f"{file_path}_report.md"
+                with open(report_path, "w", encoding="utf-8") as f:
+                    f.write(full_reply)
+                await update.message.reply_document(
+                    document=open(report_path, "rb"),
+                    caption=f"📋 <b>Laporan Network Forensic Wireshark ({html.escape(file_name)})</b>",
+                    parse_mode="HTML"
+                )
+            else:
+                await update.message.reply_text(full_reply, parse_mode="Markdown")
+                
+            await _send_raw_results(update, "PCAP Wireshark Results", pcap_battery_results, file_path)
+            return
+
+        # File biner, arsip, gambar, atau artefak CTF lainnya
+        ai = AIOrchestrator()
+        await status_card.edit_text(
+            f"<b>[ ORCHESTRATING TOOLS ]</b>\n"
+            f"» <b>File:</b> <code>{html.escape(file_name)}</code>\n"
+            f"<code>STATUS: [2/3] Memilih tools paralel...</code>",
+            parse_mode="HTML"
+        )
+
+        assessment = await ai.assess_challenge(text_context="Pecahkan berkas CTF ini secara mendalam", file_name=file_name)
+        category = assessment.get("category", "Unknown")
+        tools_to_run = assessment.get("tools", ["file", "strings", "binwalk", "hexdump"])
+
+        tools_display = ", ".join([f"<code>{t}</code>" for t in tools_to_run])
+        await status_card.edit_text(
+            f"<b>[ EXECUTING CONCURRENT TOOLS ]</b>\n"
+            f"» <b>File:</b> <code>{html.escape(file_name)}</code>\n"
+            f"» <b>Kategori:</b> <code>{html.escape(category)}</code>\n"
+            f"» <b>Tools :</b> {tools_display}\n\n"
+            f"<code>STATUS: [3/3] Menjalankan tools secara bersamaan...</code>",
+            parse_mode="HTML"
+        )
+
+        tool_results = await execute_concurrent_tools(tools_to_run, file_path)
+        final_report = await ai.analyze_results(tool_results, previous_context=f"Kategori: {category}")
+
+        if len(final_report) > 3800:
+            report_path = f"{file_path}_report.md"
+            with open(report_path, "w", encoding="utf-8") as f:
+                f.write(final_report)
+            await update.message.reply_document(
+                document=open(report_path, "rb"),
+                caption=f"📋 <b>Laporan Analisis Taktis KIIBOT AI ({html.escape(file_name)})</b>",
+                parse_mode="HTML"
+            )
+        else:
+            await update.message.reply_text(
+                f"<b>[ KIIBOT INCIDENT REPORT ]</b>\n\n"
+                f"{final_report}",
+                parse_mode="Markdown"
+            )
+
+        await _send_raw_results(update, f"Tools Output ({category})", tool_results, file_path)
+
+    except Exception as e:
+        logger.error(f"Gagal memproses dokumen: {e}")
+        await status_card.edit_text(f"❌ <b>Gagal memproses file:</b> <code>{html.escape(str(e))}</code>", parse_mode="HTML")
+
+
+async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Menangani pengiriman foto / gambar.
+    1. AI Vision menganalisis gambar soal dengan mendalam: Konsep Soal, Kategori, Tools di VPS, & Flag.
+    2. Guardrail: Jika gambar di luar konteks -> JANGAN DIBALAS (Silent drop).
+    3. Jika gambar adalah tantangan Steganografi: Eksekusi tools stego paralel di VPS.
+    """
+    if not check_auth(update) or not update.message or not update.message.photo:
+        return
+
+    caption = update.message.caption or ""
+    photo = update.message.photo[-1]
+    file_id = photo.file_id
+    file_name = f"photo_{file_id[:8]}.jpg"
+
+    status_card = await update.message.reply_text(
+        "<b>[ IMAGE INSPECTION ]</b>\n"
+        "<code>STATUS: [1/3] Mengunduh gambar resolusi tinggi...</code>",
+        parse_mode="HTML"
+    )
+
+    try:
+        new_file = await context.bot.get_file(file_id)
+        os.makedirs("temp_ctf", exist_ok=True)
+        file_path = os.path.join("temp_ctf", file_name)
+        await new_file.download_to_drive(file_path)
+
+        ai = AIOrchestrator()
+
+        # 1. Analisis Gambar dengan AI Vision
+        if ai.is_available():
+            await status_card.edit_text(
+                "<b>[ AI VISION INSPECTION ]</b>\n"
+                "<code>STATUS: [2/3] Membaca teks, kode, & konsep tantangan dengan AI Vision...</code>",
+                parse_mode="HTML"
+            )
+
+            vision_report = await ai.analyze_challenge_image(image_path=file_path, caption=caption)
+
+            # STRICT GUARDRAIL: Jika gambar di luar konteks, hapus pesan status dan silent drop (JANGAN DIBALAS)
+            if "[OUT_OF_CONTEXT]" in vision_report:
+                logger.info("[GUARDRAIL DROP] Foto/gambar di luar konteks diabaikan (tidak dibalas).")
+                try:
+                    await status_card.delete()
+                except Exception:
+                    pass
+                return
+
+            # Cek apakah ini tantangan steganografi yang perlu tools lokal di VPS
+            is_stego = "stegano" in vision_report.lower() or "lsb" in vision_report.lower()
+            stego_summary = ""
+            if is_stego:
+                await status_card.edit_text(
+                    "<b>[ CONCURRENT STEGO SCAN ]</b>\n"
+                    "» <b>Stego Tools:</b> <code>exiftool, strings, zsteg, steghide, binwalk</code>\n"
+                    "<code>STATUS: [3/3] Menjalankan baterai tools stego di VPS serentak...</code>",
+                    parse_mode="HTML"
+                )
+                stego_tools = ["exiftool", "strings", "binwalk", "zsteg", "steghide"]
+                stego_results = await execute_concurrent_tools(stego_tools, file_path)
+                stego_summary = "\n\n<b>🧰 Hasil Ekstraksi Tools Stego Lokal (VPS):</b>\n"
+                for tname, tout in stego_results.items():
+                    if tout and "error" not in tout.lower() and "not found" not in tout.lower():
+                        stego_summary += f"🔹 <b>{tname}:</b>\n<code>{html.escape(str(tout)[:200])}</code>\n"
+
+            # Kirim hasil Laporan Detail Gambar Soal
+            await status_card.delete()
+            final_message = vision_report
+            if stego_summary:
+                final_message += stego_summary
+
+            if len(final_message) > 3800:
+                report_path = f"{file_path}_vision_report.md"
+                with open(report_path, "w", encoding="utf-8") as f:
+                    f.write(final_message)
+                await update.message.reply_document(
+                    document=open(report_path, "rb"),
+                    caption="📋 <b>Laporan Detail Analisis Gambar Soal CTF & Rekomendasi Tools VPS</b>",
+                    parse_mode="HTML"
+                )
+            else:
+                await update.message.reply_text(final_message, parse_mode="Markdown")
+
+        else:
+            # Fallback jika AI belum aktif: Jalankan tools stego lokal di VPS
+            await status_card.edit_text(
+                "<b>[ RUNNING LOCAL STEGO TOOLS ]</b>\n"
+                "» <b>Tools:</b> <code>exiftool, zsteg, steghide, binwalk, strings</code>\n"
+                "<code>STATUS: [2/2] Memeriksa metadata & LSB...</code>",
+                parse_mode="HTML"
+            )
+            tool_results = await execute_concurrent_tools(["exiftool", "strings", "binwalk", "zsteg", "steghide"], file_path)
+            report = "<b>🖼️ Hasil Ekstraksi Tools Gambar (VPS):</b>\n\n"
+            for tname, tout in tool_results.items():
+                report += f"🔹 <b>{tname}:</b> <code>{html.escape(str(tout)[:300])}</code>\n\n"
+            await status_card.edit_text(report, parse_mode="HTML")
+
+    except Exception as e:
+        logger.error(f"Gagal memproses gambar: {e}")
+        await status_card.edit_text(f"❌ <b>Gagal memproses gambar:</b> <code>{html.escape(str(e))}</code>", parse_mode="HTML")
+
+
+def main():
+    """Entrypoint utama Telegram Bot."""
+    if BOT_TOKEN == "GANTI_DENGAN_TOKEN_ANDA":
+        print("[-] PERINGATAN: TELEGRAM_BOT_TOKEN belum diisi.")
+        print("    Silakan set environment variable TELEGRAM_BOT_TOKEN atau isi langsung di script ini.")
+        return
+
+    print("[+] Menginisialisasi KIIBOT Telegram Bot Engine...")
+    app = Application.builder().token(BOT_TOKEN).build()
+
+    # Routing Command
+    app.add_handler(CommandHandler("start", start_command))
+    app.add_handler(CommandHandler("help", help_command))
+    app.add_handler(CommandHandler("soc", soc_command))
+    app.add_handler(CommandHandler("triage", triage_command))
+    app.add_handler(CommandHandler("tools", tools_command))
+    app.add_handler(CommandHandler("doctor", doctor_command))
+    app.add_handler(CommandHandler("aikeys", aikeys_command))
+    app.add_handler(CommandHandler("mitre", mitre_command))
+    app.add_handler(CommandHandler("decode", decode_command))
+    app.add_handler(CommandHandler("analyze", analyze_command))
+    app.add_handler(CommandHandler("report", report_command))
+
+    # Routing Callback Query (Tombol Interaktif)
+    app.add_handler(CallbackQueryHandler(handle_callback_query))
+
+    # Routing Message
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
+    app.add_handler(MessageHandler(filters.Document.ALL, handle_document))
+    app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
+
+    # Silent drop: Abaikan semua jenis pesan non-teks/non-file yang di luar konteks
+    # (voice, sticker, video note, video, animation, dsb.) — JANGAN DIBALAS
+    async def _silent_drop(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        logger.debug("[GUARDRAIL DROP] Non-cyber media type diabaikan.")
+
+    app.add_handler(MessageHandler(
+        filters.VOICE | filters.Sticker.ALL | filters.VIDEO_NOTE | filters.ANIMATION | filters.CONTACT | filters.LOCATION,
+        _silent_drop
+    ))
+
+    print("[+] KIIBOT Bot aktif & siap mendengarkan (Polling mode)...")
+    app.run_polling(allowed_updates=Update.ALL_TYPES)
+
+
+if __name__ == "__main__":
+    main()

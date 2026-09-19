@@ -1,0 +1,1484 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# KIIBOT Tool Registry
+# ═══════════════════════════════════════════════════════════════════════════════
+# Every tool KIIBOT can use, with metadata for automatic selection.
+
+tools:
+
+  # ─── Information Gathering / Recon ────────────────────────────────────────────
+
+  - name: nmap
+    category: recon
+    binary: nmap
+    package: nmap
+    version_command: "nmap --version"
+    install_method: apt
+    purpose: "Network port scanner and service detection"
+    input_types: [ip, host, cidr]
+    risk: medium
+    local_only: false
+    recommended_for: [network, web, recon]
+    alternatives: [rustscan, masscan]
+
+  - name: rustscan
+    category: recon
+    binary: rustscan
+    package: rustscan
+    version_command: "rustscan --version"
+    install_method: apt
+    purpose: "Fast port scanner (Rust-based, feeds to nmap)"
+    input_types: [ip, host]
+    risk: medium
+    local_only: false
+    recommended_for: [network, recon]
+    alternatives: [nmap]
+    optional: true
+
+  - name: masscan
+    category: recon
+    binary: masscan
+    package: masscan
+    version_command: "masscan --version"
+    install_method: apt
+    purpose: "Mass IP port scanner"
+    input_types: [ip, cidr]
+    risk: high
+    local_only: false
+    recommended_for: [network, recon]
+    alternatives: [nmap]
+    optional: true
+
+  - name: httpx
+    category: recon
+    binary: httpx
+    package: httpx-toolkit
+    version_command: "httpx --version"
+    install_method: apt
+    purpose: "HTTP probing and technology detection"
+    input_types: [url, host]
+    risk: low
+    local_only: false
+    recommended_for: [web, recon]
+    alternatives: [httprobe, curl]
+
+  - name: whatweb
+    category: recon
+    binary: whatweb
+    package: whatweb
+    version_command: "whatweb --version"
+    install_method: apt
+    purpose: "Web technology fingerprinting"
+    input_types: [url]
+    risk: low
+    local_only: false
+    recommended_for: [web, recon]
+    alternatives: [httpx]
+
+  - name: wafw00f
+    category: recon
+    binary: wafw00f
+    package: wafw00f
+    version_command: "wafw00f --version"
+    install_method: apt
+    purpose: "Web Application Firewall detection"
+    input_types: [url]
+    risk: low
+    local_only: false
+    recommended_for: [web, recon]
+    alternatives: []
+
+  - name: amass
+    category: recon
+    binary: amass
+    package: amass
+    version_command: "amass --version"
+    install_method: apt
+    purpose: "Subdomain enumeration and OSINT"
+    input_types: [domain]
+    risk: low
+    local_only: false
+    recommended_for: [osint, recon]
+    alternatives: [subfinder]
+    optional: true
+
+  - name: subfinder
+    category: recon
+    binary: subfinder
+    package: subfinder
+    version_command: "subfinder --version"
+    install_method: apt
+    purpose: "Fast subdomain discovery"
+    input_types: [domain]
+    risk: low
+    local_only: false
+    recommended_for: [osint, recon]
+    alternatives: [amass]
+    optional: true
+
+  - name: dnsrecon
+    category: recon
+    binary: dnsrecon
+    package: dnsrecon
+    version_command: "dnsrecon --version"
+    install_method: apt
+    purpose: "DNS enumeration"
+    input_types: [domain]
+    risk: low
+    local_only: false
+    recommended_for: [network, recon, osint]
+    alternatives: [fierce]
+    optional: true
+
+  - name: fierce
+    category: recon
+    binary: fierce
+    package: fierce
+    version_command: "fierce --version"
+    install_method: apt
+    purpose: "DNS reconnaissance"
+    input_types: [domain]
+    risk: low
+    local_only: false
+    recommended_for: [network, recon]
+    alternatives: [dnsrecon]
+    optional: true
+
+  - name: theharvester
+    category: recon
+    binary: theHarvester
+    package: theharvester
+    version_command: "theHarvester --help"
+    install_method: apt
+    purpose: "Email, subdomain, and name harvesting"
+    input_types: [domain]
+    risk: low
+    local_only: false
+    recommended_for: [osint, recon]
+    alternatives: []
+    optional: true
+
+  - name: recon-ng
+    category: recon
+    binary: recon-ng
+    package: recon-ng
+    version_command: "recon-ng --version"
+    install_method: apt
+    purpose: "Web reconnaissance framework"
+    input_types: [domain]
+    risk: low
+    local_only: false
+    recommended_for: [osint, recon]
+    alternatives: []
+    optional: true
+
+  # ─── Web Application Testing ─────────────────────────────────────────────────
+
+  - name: ffuf
+    category: web
+    binary: ffuf
+    package: ffuf
+    version_command: "ffuf --version"
+    install_method: apt
+    purpose: "Fast web fuzzer for directory/parameter discovery"
+    input_types: [url]
+    risk: medium
+    local_only: false
+    recommended_for: [web, enumeration]
+    alternatives: [gobuster, feroxbuster, dirsearch]
+
+  - name: gobuster
+    category: web
+    binary: gobuster
+    package: gobuster
+    version_command: "gobuster version"
+    install_method: apt
+    purpose: "Directory/DNS brute-forcer"
+    input_types: [url, domain]
+    risk: medium
+    local_only: false
+    recommended_for: [web, enumeration]
+    alternatives: [ffuf, feroxbuster]
+
+  - name: feroxbuster
+    category: web
+    binary: feroxbuster
+    package: feroxbuster
+    version_command: "feroxbuster --version"
+    install_method: apt
+    purpose: "Recursive content discovery"
+    input_types: [url]
+    risk: medium
+    local_only: false
+    recommended_for: [web, enumeration]
+    alternatives: [ffuf, gobuster]
+
+  - name: dirsearch
+    category: web
+    binary: dirsearch
+    package: dirsearch
+    version_command: "dirsearch --version"
+    install_method: apt
+    purpose: "Web path scanner"
+    input_types: [url]
+    risk: medium
+    local_only: false
+    recommended_for: [web, enumeration]
+    alternatives: [ffuf]
+    optional: true
+
+  - name: dirb
+    category: web
+    binary: dirb
+    package: dirb
+    version_command: "dirb"
+    install_method: apt
+    purpose: "Web content scanner"
+    input_types: [url]
+    risk: medium
+    local_only: false
+    recommended_for: [web, enumeration]
+    alternatives: [ffuf]
+    optional: true
+
+  - name: wfuzz
+    category: web
+    binary: wfuzz
+    package: wfuzz
+    version_command: "wfuzz --version"
+    install_method: apt
+    purpose: "Web application fuzzer"
+    input_types: [url]
+    risk: medium
+    local_only: false
+    recommended_for: [web, fuzzing]
+    alternatives: [ffuf]
+
+  - name: nikto
+    category: web
+    binary: nikto
+    package: nikto
+    version_command: "nikto -Version"
+    install_method: apt
+    purpose: "Web server vulnerability scanner"
+    input_types: [url, host]
+    risk: medium
+    local_only: false
+    recommended_for: [web, vulnerability]
+    alternatives: [nuclei]
+
+  - name: nuclei
+    category: web
+    binary: nuclei
+    package: nuclei
+    version_command: "nuclei --version"
+    install_method: apt
+    purpose: "Template-based vulnerability scanner"
+    input_types: [url, host]
+    risk: medium
+    local_only: false
+    recommended_for: [web, vulnerability]
+    alternatives: [nikto]
+
+  - name: sqlmap
+    category: web
+    binary: sqlmap
+    package: sqlmap
+    version_command: "sqlmap --version"
+    install_method: apt
+    purpose: "Automatic SQL injection detection and exploitation"
+    input_types: [url]
+    risk: high
+    local_only: false
+    recommended_for: [web, sqli]
+    alternatives: []
+
+  - name: burpsuite
+    category: web
+    binary: burpsuite
+    package: burpsuite
+    version_command: ""
+    install_method: apt
+    purpose: "Web application security testing platform"
+    input_types: [url]
+    risk: medium
+    local_only: false
+    recommended_for: [web]
+    alternatives: [caido, mitmproxy]
+    notes: "GUI application — launch manually"
+    optional: true
+
+  - name: mitmproxy
+    category: web
+    binary: mitmproxy
+    package: mitmproxy
+    version_command: "mitmproxy --version"
+    install_method: apt
+    purpose: "Interactive HTTPS proxy"
+    input_types: [url]
+    risk: medium
+    local_only: false
+    recommended_for: [web, network]
+    alternatives: [burpsuite]
+    optional: true
+
+  # ─── Network Tools ───────────────────────────────────────────────────────────
+
+  - name: curl
+    category: network
+    binary: curl
+    package: curl
+    version_command: "curl --version"
+    install_method: apt
+    purpose: "HTTP client and data transfer"
+    input_types: [url]
+    risk: low
+    local_only: false
+    recommended_for: [web, network, recon]
+    alternatives: [wget, httpie]
+
+  - name: wget
+    category: network
+    binary: wget
+    package: wget
+    version_command: "wget --version"
+    install_method: apt
+    purpose: "File downloader"
+    input_types: [url]
+    risk: low
+    local_only: false
+    recommended_for: [web, network]
+    alternatives: [curl]
+
+  - name: httpie
+    category: network
+    binary: http
+    package: httpie
+    version_command: "http --version"
+    install_method: pip
+    purpose: "Human-friendly HTTP client"
+    input_types: [url]
+    risk: low
+    local_only: false
+    recommended_for: [web, network]
+    alternatives: [curl]
+    optional: true
+
+  - name: netcat
+    category: network
+    binary: nc
+    package: netcat-openbsd
+    version_command: "nc -h"
+    install_method: apt
+    purpose: "TCP/UDP network utility"
+    input_types: [host, ip]
+    risk: medium
+    local_only: false
+    recommended_for: [network, pwn]
+    alternatives: [socat]
+
+  - name: socat
+    category: network
+    binary: socat
+    package: socat
+    version_command: "socat -V"
+    install_method: apt
+    purpose: "Multipurpose relay (advanced netcat)"
+    input_types: [host, ip]
+    risk: medium
+    local_only: false
+    recommended_for: [network, pwn]
+    alternatives: [netcat]
+
+  - name: tcpdump
+    category: network
+    binary: tcpdump
+    package: tcpdump
+    version_command: "tcpdump --version"
+    install_method: apt
+    purpose: "Packet capture and analysis"
+    input_types: [interface, pcap]
+    risk: low
+    local_only: true
+    recommended_for: [network, pcap, forensics]
+    alternatives: [tshark]
+
+  - name: dig
+    category: network
+    binary: dig
+    package: dnsutils
+    version_command: "dig -v"
+    install_method: apt
+    purpose: "DNS lookup utility"
+    input_types: [domain]
+    risk: safe
+    local_only: false
+    recommended_for: [network, recon, osint]
+    alternatives: [nslookup, host]
+
+  - name: nslookup
+    category: network
+    binary: nslookup
+    package: dnsutils
+    version_command: "nslookup -version"
+    install_method: apt
+    purpose: "DNS query tool"
+    input_types: [domain]
+    risk: safe
+    local_only: false
+    recommended_for: [network, recon]
+    alternatives: [dig]
+
+  - name: host
+    category: network
+    binary: host
+    package: dnsutils
+    version_command: "host -V"
+    install_method: apt
+    purpose: "DNS lookup"
+    input_types: [domain]
+    risk: safe
+    local_only: false
+    recommended_for: [network, recon]
+    alternatives: [dig]
+
+  - name: traceroute
+    category: network
+    binary: traceroute
+    package: traceroute
+    version_command: "traceroute --version"
+    install_method: apt
+    purpose: "Trace network route"
+    input_types: [host, ip]
+    risk: low
+    local_only: false
+    recommended_for: [network]
+    alternatives: [mtr]
+
+  - name: openssl
+    category: network
+    binary: openssl
+    package: openssl
+    version_command: "openssl version"
+    install_method: apt
+    purpose: "TLS/SSL/crypto utility"
+    input_types: [host, certificate, key]
+    risk: safe
+    local_only: true
+    recommended_for: [crypto, network, web]
+    alternatives: []
+
+  # ─── Packet Capture / Sniffing ───────────────────────────────────────────────
+
+  - name: wireshark
+    category: pcap
+    binary: wireshark
+    package: wireshark
+    version_command: "wireshark --version"
+    install_method: apt
+    purpose: "GUI network protocol analyzer"
+    input_types: [pcap, pcapng]
+    risk: safe
+    local_only: true
+    recommended_for: [pcap, network, forensics]
+    alternatives: [tshark]
+    notes: "GUI application"
+
+  - name: tshark
+    category: pcap
+    binary: tshark
+    package: tshark
+    version_command: "tshark --version"
+    install_method: apt
+    purpose: "CLI network protocol analyzer"
+    input_types: [pcap, pcapng]
+    risk: safe
+    local_only: true
+    recommended_for: [pcap, network, forensics]
+    alternatives: [wireshark]
+
+  - name: zeek
+    category: pcap
+    binary: zeek
+    package: zeek
+    version_command: "zeek --version"
+    install_method: apt
+    purpose: "Network analysis framework"
+    input_types: [pcap, pcapng]
+    risk: safe
+    local_only: true
+    recommended_for: [pcap, network, blue_team]
+    alternatives: [tshark]
+    optional: true
+
+  # ─── Forensics ───────────────────────────────────────────────────────────────
+
+  - name: file
+    category: forensics
+    binary: file
+    package: file
+    version_command: "file --version"
+    install_method: apt
+    purpose: "File type identification"
+    input_types: [any]
+    risk: safe
+    local_only: true
+    recommended_for: [forensics, stego, reverse, misc]
+    alternatives: []
+
+  - name: strings
+    category: forensics
+    binary: strings
+    package: binutils
+    version_command: "strings --version"
+    install_method: apt
+    purpose: "Extract printable strings from files"
+    input_types: [any]
+    risk: safe
+    local_only: true
+    recommended_for: [forensics, reverse, stego, misc]
+    alternatives: []
+
+  - name: exiftool
+    category: forensics
+    binary: exiftool
+    package: libimage-exiftool-perl
+    version_command: "exiftool -ver"
+    install_method: apt
+    purpose: "Metadata analysis for images, documents, media"
+    input_types: [jpg, jpeg, png, gif, bmp, pdf, mp3, wav, mp4, doc, docx, xls, xlsx]
+    risk: safe
+    local_only: true
+    recommended_for: [forensics, stego, osint]
+    alternatives: []
+
+  - name: binwalk
+    category: forensics
+    binary: binwalk
+    package: binwalk
+    version_command: "binwalk --help"
+    install_method: apt
+    purpose: "Firmware/binary analysis and extraction"
+    input_types: [any]
+    risk: safe
+    local_only: true
+    recommended_for: [forensics, stego, reverse]
+    alternatives: []
+
+  - name: foremost
+    category: forensics
+    binary: foremost
+    package: foremost
+    version_command: "foremost -V"
+    install_method: apt
+    purpose: "File carving from disk images"
+    input_types: [disk_image, any]
+    risk: safe
+    local_only: true
+    recommended_for: [forensics, stego]
+    alternatives: [scalpel]
+
+  - name: scalpel
+    category: forensics
+    binary: scalpel
+    package: scalpel
+    version_command: "scalpel -V"
+    install_method: apt
+    purpose: "File carving tool"
+    input_types: [disk_image, any]
+    risk: safe
+    local_only: true
+    recommended_for: [forensics]
+    alternatives: [foremost]
+    optional: true
+
+  - name: bulk_extractor
+    category: forensics
+    binary: bulk_extractor
+    package: bulk-extractor
+    version_command: "bulk_extractor -h"
+    install_method: apt
+    purpose: "Extract interesting features from disk/memory"
+    input_types: [disk_image, memory_dump]
+    risk: safe
+    local_only: true
+    recommended_for: [forensics]
+    alternatives: []
+    optional: true
+
+  - name: xxd
+    category: forensics
+    binary: xxd
+    package: xxd
+    version_command: "xxd --version"
+    install_method: apt
+    purpose: "Hex dump utility"
+    input_types: [any]
+    risk: safe
+    local_only: true
+    recommended_for: [forensics, reverse, crypto]
+    alternatives: [hexdump]
+
+  - name: pngcheck
+    category: forensics
+    binary: pngcheck
+    package: pngcheck
+    version_command: "pngcheck"
+    install_method: apt
+    purpose: "PNG file integrity checker"
+    input_types: [png]
+    risk: safe
+    local_only: true
+    recommended_for: [forensics, stego]
+    alternatives: []
+
+  - name: pdfid
+    category: forensics
+    binary: pdfid
+    package: python3-pdfid
+    version_command: "pdfid --version"
+    install_method: pip
+    purpose: "PDF structure analysis"
+    input_types: [pdf]
+    risk: safe
+    local_only: true
+    recommended_for: [forensics, malware]
+    alternatives: [pdf-parser]
+    optional: true
+
+  - name: pdf-parser
+    category: forensics
+    binary: pdf-parser
+    package: python3-pdfparser
+    version_command: "pdf-parser --help"
+    install_method: pip
+    purpose: "PDF content parser"
+    input_types: [pdf]
+    risk: safe
+    local_only: true
+    recommended_for: [forensics, malware]
+    alternatives: [pdfid]
+    optional: true
+
+  # ─── Disk / Memory Forensics ─────────────────────────────────────────────────
+
+  - name: autopsy
+    category: forensics
+    binary: autopsy
+    package: autopsy
+    version_command: "autopsy --version"
+    install_method: apt
+    purpose: "Digital forensics platform (GUI)"
+    input_types: [disk_image]
+    risk: safe
+    local_only: true
+    recommended_for: [forensics]
+    alternatives: [sleuthkit]
+    notes: "GUI application"
+    optional: true
+
+  - name: sleuthkit
+    category: forensics
+    binary: fls
+    package: sleuthkit
+    version_command: "fls -V"
+    install_method: apt
+    purpose: "File system forensics toolkit"
+    input_types: [disk_image]
+    risk: safe
+    local_only: true
+    recommended_for: [forensics]
+    alternatives: []
+
+  - name: volatility3
+    category: forensics
+    binary: vol
+    package: python3-volatility3
+    version_command: "vol --help"
+    install_method: pip
+    purpose: "Memory forensics framework"
+    input_types: [memory_dump]
+    risk: safe
+    local_only: true
+    recommended_for: [forensics, malware, blue_team]
+    alternatives: []
+    notes: "pip install volatility3"
+
+  - name: yara
+    category: forensics
+    binary: yara
+    package: yara
+    version_command: "yara --version"
+    install_method: apt
+    purpose: "Pattern matching for malware research"
+    input_types: [any]
+    risk: safe
+    local_only: true
+    recommended_for: [forensics, malware, blue_team]
+    alternatives: []
+
+  # ─── Steganography ───────────────────────────────────────────────────────────
+
+  - name: steghide
+    category: stego
+    binary: steghide
+    package: steghide
+    version_command: "steghide --version"
+    install_method: apt
+    purpose: "Steganography embedding/extraction (JPEG/BMP/WAV/AU)"
+    input_types: [jpg, jpeg, bmp, wav, au]
+    risk: safe
+    local_only: true
+    recommended_for: [stego]
+    alternatives: [stegseek]
+
+  - name: stegseek
+    category: stego
+    binary: stegseek
+    package: stegseek
+    version_command: "stegseek --version"
+    install_method: apt
+    purpose: "Fast steghide cracker"
+    input_types: [jpg, jpeg, bmp, wav]
+    risk: safe
+    local_only: true
+    recommended_for: [stego]
+    alternatives: [steghide]
+    optional: true
+
+  - name: zsteg
+    category: stego
+    binary: zsteg
+    package: zsteg
+    version_command: "zsteg --version"
+    install_method: apt
+    purpose: "PNG/BMP LSB steganography detection"
+    input_types: [png, bmp]
+    risk: safe
+    local_only: true
+    recommended_for: [stego]
+    alternatives: []
+
+  - name: outguess
+    category: stego
+    binary: outguess
+    package: outguess
+    version_command: "outguess"
+    install_method: apt
+    purpose: "Steganography tool"
+    input_types: [jpg, jpeg, pnm]
+    risk: safe
+    local_only: true
+    recommended_for: [stego]
+    alternatives: [steghide]
+    optional: true
+
+  - name: ffmpeg
+    category: stego
+    binary: ffmpeg
+    package: ffmpeg
+    version_command: "ffmpeg -version"
+    install_method: apt
+    purpose: "Media processing and extraction"
+    input_types: [mp3, wav, mp4, avi, mkv, flac]
+    risk: safe
+    local_only: true
+    recommended_for: [stego, forensics]
+    alternatives: []
+
+  # ─── Cryptography ────────────────────────────────────────────────────────────
+
+  - name: hashid
+    category: crypto
+    binary: hashid
+    package: hashid
+    version_command: "hashid --version"
+    install_method: pip
+    purpose: "Hash type identification"
+    input_types: [hash]
+    risk: safe
+    local_only: true
+    recommended_for: [crypto, password]
+    alternatives: [name-that-hash]
+
+  - name: name-that-hash
+    category: crypto
+    binary: nth
+    package: name-that-hash
+    version_command: "nth --version"
+    install_method: pip
+    purpose: "Hash identification (modern)"
+    input_types: [hash]
+    risk: safe
+    local_only: true
+    recommended_for: [crypto, password]
+    alternatives: [hashid]
+    optional: true
+
+  - name: xortool
+    category: crypto
+    binary: xortool
+    package: xortool
+    version_command: "xortool --version"
+    install_method: pip
+    purpose: "XOR cipher analysis"
+    input_types: [any]
+    risk: safe
+    local_only: true
+    recommended_for: [crypto]
+    alternatives: []
+    optional: true
+
+  - name: rsactftool
+    category: crypto
+    binary: RsaCtfTool
+    package: rsactftool
+    version_command: "RsaCtfTool --help"
+    install_method: git
+    purpose: "RSA attack tool for CTF"
+    input_types: [pem, key]
+    risk: safe
+    local_only: true
+    recommended_for: [crypto]
+    alternatives: []
+    url: "https://github.com/RsaCtfTool/RsaCtfTool"
+    optional: true
+
+  # ─── Password Cracking ──────────────────────────────────────────────────────
+
+  - name: hashcat
+    category: password
+    binary: hashcat
+    package: hashcat
+    version_command: "hashcat --version"
+    install_method: apt
+    purpose: "GPU-accelerated password/hash cracker"
+    input_types: [hash]
+    risk: low
+    local_only: true
+    recommended_for: [crypto, password]
+    alternatives: [john]
+
+  - name: john
+    category: password
+    binary: john
+    package: john
+    version_command: "john --version"
+    install_method: apt
+    purpose: "Password cracker (John the Ripper)"
+    input_types: [hash, shadow, zip, pdf]
+    risk: low
+    local_only: true
+    recommended_for: [crypto, password]
+    alternatives: [hashcat]
+
+  - name: hydra
+    category: password
+    binary: hydra
+    package: hydra
+    version_command: "hydra -V"
+    install_method: apt
+    purpose: "Online brute-force tool"
+    input_types: [host]
+    risk: high
+    local_only: false
+    recommended_for: [password, web]
+    alternatives: [medusa]
+
+  - name: medusa
+    category: password
+    binary: medusa
+    package: medusa
+    version_command: "medusa -V"
+    install_method: apt
+    purpose: "Parallel network login auditor"
+    input_types: [host]
+    risk: high
+    local_only: false
+    recommended_for: [password]
+    alternatives: [hydra]
+    optional: true
+
+  - name: crunch
+    category: password
+    binary: crunch
+    package: crunch
+    version_command: "crunch --version"
+    install_method: apt
+    purpose: "Wordlist generator"
+    input_types: []
+    risk: safe
+    local_only: true
+    recommended_for: [password]
+    alternatives: []
+
+  - name: cewl
+    category: password
+    binary: cewl
+    package: cewl
+    version_command: "cewl --version"
+    install_method: apt
+    purpose: "Custom wordlist generator from web pages"
+    input_types: [url]
+    risk: low
+    local_only: false
+    recommended_for: [password, web]
+    alternatives: []
+    optional: true
+
+  # ─── Reverse Engineering ─────────────────────────────────────────────────────
+
+  - name: ghidra
+    category: reverse
+    binary: ghidra
+    package: ghidra
+    version_command: ""
+    install_method: apt
+    purpose: "Software reverse engineering suite (NSA)"
+    input_types: [elf, pe, exe, dll, apk]
+    risk: safe
+    local_only: true
+    recommended_for: [reverse, malware]
+    alternatives: [cutter, radare2]
+    notes: "GUI application — launch via ghidra or ghidraRun"
+
+  - name: cutter
+    category: reverse
+    binary: cutter
+    package: cutter
+    version_command: "cutter --version"
+    install_method: apt
+    purpose: "GUI reverse engineering (radare2 frontend)"
+    input_types: [elf, pe, exe]
+    risk: safe
+    local_only: true
+    recommended_for: [reverse]
+    alternatives: [ghidra, radare2]
+    optional: true
+
+  - name: radare2
+    category: reverse
+    binary: r2
+    package: radare2
+    version_command: "r2 -v"
+    install_method: apt
+    purpose: "CLI reverse engineering framework"
+    input_types: [elf, pe, exe, dll]
+    risk: safe
+    local_only: true
+    recommended_for: [reverse, malware]
+    alternatives: [ghidra]
+
+  - name: gdb
+    category: reverse
+    binary: gdb
+    package: gdb
+    version_command: "gdb --version"
+    install_method: apt
+    purpose: "GNU Debugger"
+    input_types: [elf, exe]
+    risk: safe
+    local_only: true
+    recommended_for: [reverse, pwn]
+    alternatives: []
+
+  - name: pwndbg
+    category: reverse
+    binary: pwndbg
+    package: pwndbg
+    version_command: ""
+    install_method: apt
+    purpose: "GDB plugin for exploit development"
+    input_types: [elf]
+    risk: safe
+    local_only: true
+    recommended_for: [pwn, reverse]
+    alternatives: [gef]
+    notes: "GDB plugin"
+
+  - name: objdump
+    category: reverse
+    binary: objdump
+    package: binutils
+    version_command: "objdump --version"
+    install_method: apt
+    purpose: "Object file disassembler"
+    input_types: [elf, pe, obj]
+    risk: safe
+    local_only: true
+    recommended_for: [reverse, pwn]
+    alternatives: []
+
+  - name: readelf
+    category: reverse
+    binary: readelf
+    package: binutils
+    version_command: "readelf --version"
+    install_method: apt
+    purpose: "ELF file header analysis"
+    input_types: [elf]
+    risk: safe
+    local_only: true
+    recommended_for: [reverse, pwn]
+    alternatives: []
+
+  - name: nm
+    category: reverse
+    binary: nm
+    package: binutils
+    version_command: "nm --version"
+    install_method: apt
+    purpose: "Symbol table viewer"
+    input_types: [elf, obj]
+    risk: safe
+    local_only: true
+    recommended_for: [reverse, pwn]
+    alternatives: []
+
+  - name: ltrace
+    category: reverse
+    binary: ltrace
+    package: ltrace
+    version_command: "ltrace --version"
+    install_method: apt
+    purpose: "Library call tracer"
+    input_types: [elf]
+    risk: low
+    local_only: true
+    recommended_for: [reverse]
+    alternatives: [strace]
+
+  - name: strace
+    category: reverse
+    binary: strace
+    package: strace
+    version_command: "strace --version"
+    install_method: apt
+    purpose: "System call tracer"
+    input_types: [elf]
+    risk: low
+    local_only: true
+    recommended_for: [reverse]
+    alternatives: [ltrace]
+
+  - name: checksec
+    category: reverse
+    binary: checksec
+    package: checksec
+    version_command: "checksec --version"
+    install_method: apt
+    purpose: "Binary security property checker"
+    input_types: [elf, exe]
+    risk: safe
+    local_only: true
+    recommended_for: [pwn, reverse]
+    alternatives: []
+
+  - name: upx
+    category: reverse
+    binary: upx
+    package: upx-ucl
+    version_command: "upx --version"
+    install_method: apt
+    purpose: "UPX packer/unpacker"
+    input_types: [elf, exe]
+    risk: safe
+    local_only: true
+    recommended_for: [reverse, malware]
+    alternatives: []
+
+  - name: patchelf
+    category: reverse
+    binary: patchelf
+    package: patchelf
+    version_command: "patchelf --version"
+    install_method: apt
+    purpose: "ELF binary patcher"
+    input_types: [elf]
+    risk: low
+    local_only: true
+    recommended_for: [pwn]
+    alternatives: []
+
+  # ─── PWN / Exploitation ─────────────────────────────────────────────────────
+
+  - name: pwntools
+    category: pwn
+    binary: python3
+    package: pwntools
+    version_command: "python3 -c 'import pwn; print(pwn.version.__version__)'"
+    install_method: pip
+    purpose: "CTF exploitation framework (Python)"
+    input_types: [elf]
+    risk: medium
+    local_only: false
+    recommended_for: [pwn]
+    alternatives: []
+
+  - name: ropgadget
+    category: pwn
+    binary: ROPgadget
+    package: ropgadget
+    version_command: "ROPgadget --version"
+    install_method: pip
+    purpose: "ROP gadget finder"
+    input_types: [elf, pe]
+    risk: safe
+    local_only: true
+    recommended_for: [pwn]
+    alternatives: [ropper]
+
+  - name: ropper
+    category: pwn
+    binary: ropper
+    package: ropper
+    version_command: "ropper --version"
+    install_method: pip
+    purpose: "ROP/JOP/SOP gadget finder"
+    input_types: [elf, pe]
+    risk: safe
+    local_only: true
+    recommended_for: [pwn]
+    alternatives: [ropgadget]
+
+  - name: one_gadget
+    category: pwn
+    binary: one_gadget
+    package: one_gadget
+    version_command: "one_gadget --version"
+    install_method: apt
+    purpose: "Find one-shot RCE gadgets in libc"
+    input_types: [elf]
+    risk: safe
+    local_only: true
+    recommended_for: [pwn]
+    alternatives: []
+    optional: true
+
+  - name: metasploit
+    category: pwn
+    binary: msfconsole
+    package: metasploit-framework
+    version_command: "msfconsole --version"
+    install_method: apt
+    purpose: "Penetration testing framework"
+    input_types: [host, ip]
+    risk: critical
+    local_only: false
+    recommended_for: [pwn, red_team]
+    alternatives: []
+    optional: true
+
+  # ─── Mobile Reverse Engineering ──────────────────────────────────────────────
+
+  - name: jadx
+    category: mobile
+    binary: jadx
+    package: jadx
+    version_command: "jadx --version"
+    install_method: apt
+    purpose: "DEX/APK to Java decompiler"
+    input_types: [apk, dex, jar]
+    risk: safe
+    local_only: true
+    recommended_for: [reverse, mobile]
+    alternatives: [apktool]
+
+  - name: apktool
+    category: mobile
+    binary: apktool
+    package: apktool
+    version_command: "apktool --version"
+    install_method: apt
+    purpose: "APK reverse engineering"
+    input_types: [apk]
+    risk: safe
+    local_only: true
+    recommended_for: [reverse, mobile]
+    alternatives: [jadx]
+
+  # ─── Malware Analysis ───────────────────────────────────────────────────────
+
+  - name: capa
+    category: malware
+    binary: capa
+    package: capa
+    version_command: "capa --version"
+    install_method: pip
+    purpose: "Identify program capabilities"
+    input_types: [elf, pe, exe, dll]
+    risk: safe
+    local_only: true
+    recommended_for: [malware, reverse]
+    alternatives: []
+    optional: true
+
+  - name: oletools
+    category: malware
+    binary: olevba
+    package: oletools
+    version_command: "olevba --version"
+    install_method: pip
+    purpose: "Microsoft Office malware analysis"
+    input_types: [doc, docx, xls, xlsx, ppt, ole]
+    risk: safe
+    local_only: true
+    recommended_for: [malware, forensics]
+    alternatives: []
+    optional: true
+
+  # ─── OSINT ───────────────────────────────────────────────────────────────────
+
+  - name: whois
+    category: osint
+    binary: whois
+    package: whois
+    version_command: "whois --version"
+    install_method: apt
+    purpose: "Domain registration lookup"
+    input_types: [domain]
+    risk: safe
+    local_only: false
+    recommended_for: [osint, recon]
+    alternatives: []
+
+  - name: sherlock
+    category: osint
+    binary: sherlock
+    package: sherlock
+    version_command: "sherlock --version"
+    install_method: pip
+    purpose: "Username search across social networks"
+    input_types: [username]
+    risk: low
+    local_only: false
+    recommended_for: [osint]
+    alternatives: []
+    optional: true
+
+  # ─── Blue Team / Detection ──────────────────────────────────────────────────
+
+  - name: sigma
+    category: blue_team
+    binary: sigma
+    package: sigma-cli
+    version_command: "sigma --version"
+    install_method: pip
+    purpose: "Detection rule format and converter"
+    input_types: [log]
+    risk: safe
+    local_only: true
+    recommended_for: [blue_team]
+    alternatives: []
+    optional: true
+
+  - name: suricata
+    category: blue_team
+    binary: suricata
+    package: suricata
+    version_command: "suricata --build-info"
+    install_method: apt
+    purpose: "Network IDS/IPS"
+    input_types: [pcap]
+    risk: safe
+    local_only: true
+    recommended_for: [blue_team, network]
+    alternatives: []
+    optional: true
+
+  - name: osquery
+    category: blue_team
+    binary: osqueryi
+    package: osquery
+    version_command: "osqueryi --version"
+    install_method: apt
+    purpose: "System analytics via SQL"
+    input_types: []
+    risk: safe
+    local_only: true
+    recommended_for: [blue_team]
+    alternatives: []
+    optional: true
+
+  # ─── Container / Cloud ──────────────────────────────────────────────────────
+
+  - name: docker
+    category: container
+    binary: docker
+    package: docker.io
+    version_command: "docker --version"
+    install_method: apt
+    purpose: "Container runtime"
+    input_types: []
+    risk: low
+    local_only: true
+    recommended_for: [lab, container]
+    alternatives: []
+    optional: true
+
+  - name: trivy
+    category: container
+    binary: trivy
+    package: trivy
+    version_command: "trivy --version"
+    install_method: apt
+    purpose: "Container security scanner"
+    input_types: [docker_image]
+    risk: safe
+    local_only: true
+    recommended_for: [container, blue_team]
+    alternatives: []
+    optional: true
+
+  # ─── Fuzzing ─────────────────────────────────────────────────────────────────
+
+  - name: aflplusplus
+    category: fuzzing
+    binary: afl-fuzz
+    package: afl++
+    version_command: "afl-fuzz --version"
+    install_method: apt
+    purpose: "Coverage-guided binary fuzzer"
+    input_types: [elf]
+    risk: low
+    local_only: true
+    recommended_for: [fuzzing, pwn]
+    alternatives: []
+    optional: true
+
+  - name: radamsa
+    category: fuzzing
+    binary: radamsa
+    package: radamsa
+    version_command: "radamsa --version"
+    install_method: apt
+    purpose: "General-purpose test case mutator"
+    input_types: [any]
+    risk: safe
+    local_only: true
+    recommended_for: [fuzzing]
+    alternatives: []
+    optional: true
+
+  # ─── OCR / Image ────────────────────────────────────────────────────────────
+
+  - name: tesseract
+    category: ocr
+    binary: tesseract
+    package: tesseract-ocr
+    version_command: "tesseract --version"
+    install_method: apt
+    purpose: "Optical character recognition"
+    input_types: [png, jpg, jpeg, bmp, tiff]
+    risk: safe
+    local_only: true
+    recommended_for: [image, forensics]
+    alternatives: []
+    optional: true
+
+  # ─── Misc Utilities ─────────────────────────────────────────────────────────
+
+  - name: jq
+    category: utility
+    binary: jq
+    package: jq
+    version_command: "jq --version"
+    install_method: apt
+    purpose: "JSON processor"
+    input_types: [json]
+    risk: safe
+    local_only: true
+    recommended_for: [web, misc]
+    alternatives: []
+
+  - name: xmllint
+    category: utility
+    binary: xmllint
+    package: libxml2-utils
+    version_command: "xmllint --version"
+    install_method: apt
+    purpose: "XML parser/validator"
+    input_types: [xml, html]
+    risk: safe
+    local_only: true
+    recommended_for: [web, misc]
+    alternatives: []
+
+  - name: 7z
+    category: utility
+    binary: 7z
+    package: p7zip-full
+    version_command: "7z"
+    install_method: apt
+    purpose: "Archive extraction"
+    input_types: [7z, zip, rar, gz, tar]
+    risk: safe
+    local_only: true
+    recommended_for: [forensics, misc]
+    alternatives: [unzip]
+
+  - name: unzip
+    category: utility
+    binary: unzip
+    package: unzip
+    version_command: "unzip -v"
+    install_method: apt
+    purpose: "ZIP extraction"
+    input_types: [zip]
+    risk: safe
+    local_only: true
+    recommended_for: [forensics, misc]
+    alternatives: [7z]
+
+  - name: unrar
+    category: utility
+    binary: unrar
+    package: unrar
+    version_command: "unrar"
+    install_command: "sudo apt install -y unrar"
+    install_method: apt
+    purpose: "RAR extraction"
+    input_types: [rar]
+    risk: safe
+    local_only: true
+    recommended_for: [forensics, misc]
+    alternatives: [7z]
+
+  - name: python3
+    category: utility
+    binary: python3
+    package: python3
+    version_command: "python3 --version"
+    install_method: apt
+    purpose: "Python interpreter"
+    input_types: [py]
+    risk: safe
+    local_only: true
+    recommended_for: [misc, crypto, pwn]
+    alternatives: []
+
+  - name: git
+    category: utility
+    binary: git
+    package: git
+    version_command: "git --version"
+    install_method: apt
+    purpose: "Version control"
+    input_types: []
+    risk: safe
+    local_only: true
+    recommended_for: [misc]
+    alternatives: []
+
+  - name: ent
+    category: utility
+    binary: ent
+    package: ent
+    version_command: "ent --help"
+    install_method: apt
+    purpose: "Entropy calculator"
+    input_types: [any]
+    risk: safe
+    local_only: true
+    recommended_for: [forensics, crypto, stego]
+    alternatives: []
+    optional: true
