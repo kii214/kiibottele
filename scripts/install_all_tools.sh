@@ -105,11 +105,15 @@ $SUDO apt install -y \
   yara \
   zbar-tools \
   zeek \
-  zsteg || true
+  zsteg \
+  python3-pip \
+  python3-dev \
+  python3-venv \
+  libssl-dev \
+  libffi-dev || true
 
 echo -e "\n${YELLOW}[+] Step 3: Installing CTF Python & Reversing Modules (PIP)...${NC}"
-python3 -m pip install --upgrade --quiet pip setuptools wheel
-python3 -m pip install --upgrade --quiet \
+python3 -m pip install --break-system-packages --quiet \
   angr \
   capstone \
   cryptography \
