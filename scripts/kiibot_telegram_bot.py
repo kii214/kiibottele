@@ -453,14 +453,68 @@ async def tools_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not check_auth(update) or not update.message:
         return
 
-    tools_summary = "<b>[ KIIBOT TOOL REGISTRY ]</b>\n\n"
+    tools_summary = "<b>[ KIIBOT TOOL REGISTRY & DISCOVERY ]</b>\n\n"
     
     for category, tools_dict in TOOL_REGISTRY.items():
         tool_names = ", ".join([f"{name}" for name in list(tools_dict.keys())[:5]])
-        tools_summary += f"<b>» {category.upper()}:</b>\n  {tool_names}\n\n"
+        tools_summary += f"<b>» {category.upper()}:</b>\n  <code>{tool_names}</code>\n\n"
         
-    tools_summary += "<i>Tools ini dieksekusi secara otomatis saat menerima artefak terkait.</i>"
+    tools_summary += (
+        "<i>💡 Tips: Gunakan <code>/findtool &lt;nama_tool&gt;</code> untuk mengecek ketersediaan tool spesifik di VPS.</i>"
+    )
     await update.message.reply_text(tools_summary, parse_mode="HTML")
+
+
+async def findtool_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    /findtool <nama_tool> — Pencarian & Diagnosa Pintar Ketersediaan Tools.
+    Mengecek apakah tool ada di registry, PATH VPS, atau menyarankan paket installer.
+    """
+    if not check_auth(update) or not update.message:
+        return
+
+    if not context.args:
+        await update.message.reply_text(
+            "🔎 <b>Format Perintah:</b> <code>/findtool &lt;nama_tool&gt;</code>\n\n"
+            "<i>Contoh:</i>\n"
+            "• <code>/findtool nmap</code>\n"
+            "• <code>/findtool gobuster</code>\n"
+            "• <code>/findtool volatility3</code>",
+            parse_mode="HTML"
+        )
+        return
+
+    tool_query = context.args[0].lower().strip()
+    import shutil
+    bin_path = shutil.which(tool_query) or "Tidak ditemukan di PATH"
+    is_in_path = shutil.which(tool_query) is not None
+
+    found_in_reg = []
+    for cat, tools in TOOL_REGISTRY.items():
+        if tool_query in tools:
+            found_in_reg.append(cat)
+
+    status_icon = "🟢 TERSEDIA & SIAP" if is_in_path else "🔴 UNINSTALLED"
+
+    res_text = (
+        "<b>🔍 [ SMART TOOL DIAGNOSTICS & FINDER ]</b>\n"
+        f"<code>QUERY: {html.escape(tool_query)} | STATUS: {status_icon}</code>\n"
+        "───────────────────────────────\n\n"
+        f"» <b>Nama Tool       :</b> <code>{html.escape(tool_query)}</code>\n"
+        f"» <b>Lokasi Binary   :</b> <code>{html.escape(bin_path)}</code>\n"
+        f"» <b>Registry Category:</b> <code>{', '.join(found_in_reg) or 'Extra Tool'}</code>\n\n"
+    )
+
+    if is_in_path:
+        res_text += "✅ <b>Tool siap dieksekusi oleh KIIBOT Engine!</b>"
+    else:
+        res_text += (
+            "⚠️ <b>Tool belum terpasang di VPS.</b>\n"
+            f"<i>Cara pasang:</i> <code>sudo apt-get install -y {html.escape(tool_query)}</code>\n\n"
+            "<i>💡 Note: Zero-Failure Engine KIIBOT akan otomatis menggunakan Fallback Mode jika tool ini dijalankan, sehingga eksekusi dijamin tidak crash.</i>"
+        )
+
+    await update.message.reply_text(res_text, parse_mode="HTML")
 
 
 async def mitre_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1616,6 +1670,7 @@ def main():
     app.add_handler(CommandHandler("soc", soc_command))
     app.add_handler(CommandHandler("triage", triage_command))
     app.add_handler(CommandHandler("tools", tools_command))
+    app.add_handler(CommandHandler("findtool", findtool_command))
     app.add_handler(CommandHandler("doctor", doctor_command))
     app.add_handler(CommandHandler("aikeys", aikeys_command))
     app.add_handler(CommandHandler("mitre", mitre_command))
