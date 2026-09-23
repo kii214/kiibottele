@@ -27,8 +27,8 @@ class AIOrchestrator:
     _exhausted_keys: set = set()
 
     def __init__(self):
-        self.base_url = os.getenv("AI_BASE_URL", "https://api.openai.com/v1")
-        self.model = os.getenv("AI_MODEL", "gpt-4o")
+        self.base_url = os.getenv("AI_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai/")
+        self.model = os.getenv("AI_MODEL", "gemini-2.0-flash")
         self.api_keys: list[str] = self._load_api_keys()
 
     def _load_api_keys(self) -> list[str]:

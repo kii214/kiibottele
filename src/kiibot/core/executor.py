@@ -201,27 +201,64 @@ async def execute_concurrent_tools(
     return final_output
 
 
-async def check_all_tools_availability() -> dict[str, bool]:
+def check_all_tools_availability() -> dict:
     """
     Pre-check ketersediaan semua binary tools di TOOL_REGISTRY.
-    Berguna untuk /doctor command — dipanggil sekali saat startup.
+    Berguna untuk /doctor command — mengembalikan laporan terstruktur per kategori.
+    Return format:
+    {
+        "installed_count": int,
+        "missing_count": int,
+        "total_tools": int,
+        "categories": {
+            "category_name": {
+                "installed": ["tool1", "tool2"],
+                "missing": ["tool3"]
+            }
+        }
+    }
     """
     from kiibot.core.tool_registry import TOOL_REGISTRY
 
-    all_binaries = set()
-    for cat_tools in TOOL_REGISTRY.values():
-        for tool_cfg in cat_tools.values():
+    categories: dict[str, dict] = {}
+    installed_total = 0
+    missing_total = 0
+
+    for category, cat_tools in TOOL_REGISTRY.items():
+        cat_installed = []
+        cat_missing = []
+
+        for tool_name, tool_cfg in cat_tools.items():
             cmd = tool_cfg.get("cmd", [])
-            if cmd and cmd[0] not in ("bash", "sh", "cat", "echo"):
-                all_binaries.add(cmd[0])
+            if not cmd:
+                continue
+            binary = cmd[0]
+            # Lewati shell built-ins
+            if binary in ("bash", "sh", "cat", "echo", "awk", "grep", "sed"):
+                cat_installed.append(tool_name)
+                _TOOL_AVAILABILITY_CACHE[binary] = True
+                continue
 
-    availability = {}
-    for binary in sorted(all_binaries):
-        availability[binary] = is_tool_available(binary)
-        _TOOL_AVAILABILITY_CACHE[binary] = availability[binary]
+            available = is_tool_available(binary)
+            if available:
+                cat_installed.append(tool_name)
+                installed_total += 1
+            else:
+                cat_missing.append(tool_name)
+                missing_total += 1
 
-    installed = sum(1 for v in availability.values() if v)
-    logger.info(f"[TOOL CHECK] {installed}/{len(all_binaries)} tools tersedia di PATH.")
-    return availability
+        categories[category] = {
+            "installed": cat_installed,
+            "missing": cat_missing,
+        }
 
+    total = installed_total + missing_total
+    logger.info(f"[TOOL CHECK] {installed_total}/{total} tools tersedia di PATH.")
+
+    return {
+        "installed_count": installed_total,
+        "missing_count": missing_total,
+        "total_tools": total,
+        "categories": categories,
+    }
 

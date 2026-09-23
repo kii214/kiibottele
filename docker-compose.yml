@@ -3,13 +3,31 @@ version: '3.8'
 services:
   kiibot:
     build: .
+    image: kiibot:ubuntu
     container_name: kiibot_engine
     restart: unless-stopped
     env_file:
       - .env
+    environment:
+      - PYTHONUNBUFFERED=1
+      - TZ=Asia/Jakarta
     volumes:
       - kiibot_data:/root/.kiibot
       - ./configs/ai_keys.json:/app/configs/ai_keys.json:ro
+      - ./configs:/app/configs:ro
+    # Batasi penggunaan resource agar VPS tidak kehabisan RAM
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 256M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 volumes:
   kiibot_data:
+    driver: local

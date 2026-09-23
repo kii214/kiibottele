@@ -11,6 +11,14 @@ import os
 import re
 import sys
 
+# Auto-load .env dari root project (agar TELEGRAM_BOT_TOKEN dll terbaca)
+try:
+    from dotenv import load_dotenv
+    _env_path = os.path.join(os.path.dirname(__file__), '..', '.env')
+    load_dotenv(dotenv_path=_env_path)
+except ImportError:
+    pass  # python-dotenv tidak wajib jika env sudah di-set manual / systemd
+
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import (
     Application,
@@ -65,7 +73,7 @@ CYBER_KEYWORDS = [
     "reverse", "reversing", "forensic", "forensik", "stego", "steganography",
     "payload", "shell", "rce", "sqli", "xss", "csrf", "ssrf", "lfi", "rfi",
     "malware", "ransomware", "trojan", "backdoor", "rootkit", "sandbox",
-    
+
     # SOC & Blue Team
     "soc", "siem", "triage", "incident", "alert", "log", "logs", "wazuh", "splunk",
     "elk", "elastic", "suricata", "snort", "firewall", "waf", "ids", "ips", "edr",
@@ -73,19 +81,26 @@ CYBER_KEYWORDS = [
     "containment", "mitigasi", "mitigation", "severity", "critical", "escalation",
     "pcap", "wireshark", "tshark", "tcpdump", "traffic", "packet", "beaconing",
     "brute", "bruteforce", "login", "auth", "authentikasi", "access",
-    
+
     # Kriptografi & Decoding
     "hash", "md5", "sha1", "sha256", "sha512", "base64", "hex", "rot13", "caesar",
     "cipher", "crypto", "kripto", "rsa", "aes", "des", "xor", "jwt", "token",
     "decode", "encode", "decrypt", "encrypt", "password", "wordlist", "rockyou",
-    
+
     # Binaries & Reversing
     "elf", "binary", "executable", "pe", "checksec", "ghidra", "ida", "gdb",
     "radare2", "rop", "buffer overflow", "assembly", "disassembly", "opcode",
-    
+
     # OSINT & Recon
     "osint", "whois", "dns", "subdomain", "nmap", "gobuster", "dirbuster",
-    "nikto", "trufflehog", "gitleaks", "credential", "leak", "github"
+    "nikto", "trufflehog", "gitleaks", "credential", "leak", "github",
+
+    # Web Attack & CTF
+    "http", "https", "url", "domain", "website", "web", "sqlmap", "hydra",
+    "ffuf", "dirb", "whatweb", "wafw00f", "scan", "fuzz", "inject", "injection",
+    "username", "passwd", "creds", "credentials", "admin", "login page",
+    "webattack", "web attack", "cek web", "cek url", "analisis web",
+    "cari password", "cari user", "bypass", "bypass login"
 ]
 
 def is_cyber_soc_context(text: str) -> bool:
@@ -137,22 +152,53 @@ def is_cyber_soc_context(text: str) -> bool:
 # =====================================================================
 
 def get_main_keyboard() -> InlineKeyboardMarkup:
-    """Membuat tombol aksi cepat interaktif."""
+    """Membuat menu utama interaktif bernomor untuk mode operasi KIIBOT."""
     keyboard = [
         [
-            InlineKeyboardButton("[ SOC Workflow ]", callback_data="btn_soc"),
-            InlineKeyboardButton("[ Triage Simulator ]", callback_data="btn_triage"),
+            InlineKeyboardButton("1️⃣  Analisis File CTF", callback_data="menu_file"),
+            InlineKeyboardButton("2️⃣  Web Attack CTF", callback_data="menu_webattack"),
         ],
         [
-            InlineKeyboardButton("[ MITRE ATT&CK ]", callback_data="btn_mitre_list"),
-            InlineKeyboardButton("[ Tools Registry ]", callback_data="btn_tools"),
+            InlineKeyboardButton("3️⃣  Decode & Crypto", callback_data="menu_decode"),
+            InlineKeyboardButton("4️⃣  SOC Triage", callback_data="menu_soc"),
         ],
         [
-            InlineKeyboardButton("[ VPS Doctor ]", callback_data="btn_doctor"),
-            InlineKeyboardButton("[ AI Keys Pool ]", callback_data="btn_aikeys"),
+            InlineKeyboardButton("5️⃣  VPS Doctor", callback_data="btn_doctor"),
+            InlineKeyboardButton("6️⃣  AI Keys Status", callback_data="btn_aikeys"),
         ],
         [
-            InlineKeyboardButton("[ Bantuan & Command ]", callback_data="btn_help"),
+            InlineKeyboardButton("📚  MITRE ATT&CK", callback_data="btn_mitre_list"),
+            InlineKeyboardButton("🛠️  Tools Registry", callback_data="btn_tools"),
+        ],
+        [
+            InlineKeyboardButton("❓  Bantuan & Command", callback_data="btn_help"),
+        ]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+
+def get_webattack_keyboard(target_url: str) -> InlineKeyboardMarkup:
+    """Sub-menu pilihan mode Web Attack CTF."""
+    # Encode URL ke callback data (maks 64 char)
+    url_short = target_url[:30] if len(target_url) > 30 else target_url
+    keyboard = [
+        [
+            InlineKeyboardButton("1️⃣  Tech Fingerprint", callback_data=f"wa_fingerprint"),
+            InlineKeyboardButton("2️⃣  SQL Injection", callback_data=f"wa_sqli"),
+        ],
+        [
+            InlineKeyboardButton("3️⃣  Dir Enumeration", callback_data=f"wa_dir"),
+            InlineKeyboardButton("4️⃣  Login Brute-force", callback_data=f"wa_bruteforce"),
+        ],
+        [
+            InlineKeyboardButton("5️⃣  Vuln Scanner", callback_data=f"wa_vulnscan"),
+            InlineKeyboardButton("6️⃣  OSINT Domain", callback_data=f"wa_osint"),
+        ],
+        [
+            InlineKeyboardButton("🔥  ALL-IN-ONE BATTERY", callback_data=f"wa_all"),
+        ],
+        [
+            InlineKeyboardButton("🔙  Menu Utama", callback_data="menu_main"),
         ]
     ]
     return InlineKeyboardMarkup(keyboard)
@@ -163,23 +209,32 @@ def get_main_keyboard() -> InlineKeyboardMarkup:
 # =====================================================================
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Menampilkan sambutan eksklusif bergaya SOC Cyber Command Center."""
+    """Menampilkan sambutan eksklusif bergaya SOC Cyber Command Center dengan menu bernomor."""
     if not check_auth(update) or not update.message:
         return
 
     welcome_text = (
-        "<b>[ KIIBOT SOC & CTF ENGINE ]</b>\n"
+        "<b>[ KIIBOT SOC &amp; CTF ENGINE ]</b>\n"
         "<code>STATUS: ONLINE | ENGINE: READY</code>\n\n"
-        "Halo, Operator. Saya adalah asisten analitik siber untuk memecahkan tantangan "
-        "Jeopardy CTF dan menganalisis insiden SOC Blue Team.\n\n"
-        "<b>[ Fungsi Tersedia ]</b>\n"
-        "» <b>Forensics & Stego:</b> Analisis PCAP, Memory Dump, EXIF, Magic Bytes\n"
-        "» <b>Multi-Decoder:</b> Identifikasi Base64, Hex, ROT13/47, JWT, XOR, MD5/SHA\n"
-        "» <b>SOC Incident Triage:</b> Prioritas alert L1/L2 & Rekomendasi Mitigasi\n"
-        "» <b>MITRE ATT&CK:</b> Mapping teknik taktis dan deteksi SIEM\n"
-        "» <b>AI Pool Failover:</b> Diagnostik ketersediaan AI API Keys\n"
-        "» <b>VPS Diagnostics:</b> Cek kesehatan 40+ tools via <code>/doctor</code>\n\n"
-        "Kirimkan artefak siber (PCAP, ELF, PNG, Log, Ciphertext) untuk memulai analisis."
+        "Halo, Operator. Saya adalah asisten analitik siber untuk memecahkan "
+        "tantangan CTF dan menganalisis insiden SOC Blue Team.\n\n"
+        "<b>[ PILIH MODE OPERASI ]</b>\n"
+        "┌─────────────────────────────────────┐\n"
+        "│ 1️⃣  <b>Analisis File CTF</b>                  │\n"
+        "│    Kirim: PCAP, ELF, PNG, ZIP, LOG  │\n"
+        "│ 2️⃣  <b>Web Attack CTF</b>                    │\n"
+        "│    Ketik: /webattack &lt;url/domain&gt;    │\n"
+        "│ 3️⃣  <b>Decode &amp; Crypto</b>                  │\n"
+        "│    Ketik: /decode &lt;hash/cipher&gt;      │\n"
+        "│ 4️⃣  <b>SOC Triage</b>                        │\n"
+        "│    Ketik: /soc atau /triage          │\n"
+        "│ 5️⃣  <b>VPS Doctor</b>                        │\n"
+        "│    Ketik: /doctor                    │\n"
+        "│ 6️⃣  <b>AI Keys Status</b>                    │\n"
+        "│    Ketik: /aikeys                    │\n"
+        "└─────────────────────────────────────┘\n\n"
+        "<i>💡 Tips: Langsung kirim file (PCAP/ELF/PNG/LOG) untuk analisis otomatis,\n"
+        "atau kirim /webattack &lt;url&gt; untuk CTF web exploitation.</i>"
     )
     await update.message.reply_text(
         welcome_text,
@@ -277,7 +332,8 @@ async def doctor_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
     try:
-        report = check_all_tools_availability()
+        # check_all_tools_availability adalah fungsi sync (bukan async)
+        report = await asyncio.get_event_loop().run_in_executor(None, check_all_tools_availability)
         installed_count = report["installed_count"]
         missing_count = report["missing_count"]
         total = report["total_tools"]
@@ -581,11 +637,261 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # =====================================================================
-# CALLBACK QUERY HANDLER (UNTUK TOMBOL INTERAKTIF)
+# WEB ATTACK CTF MODULE — /webattack <url>
 # =====================================================================
 
+# Simpan target URL per user (untuk callback buttons)
+_webattack_targets: dict[int, str] = {}
+
+
+async def webattack_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    /webattack <url> — Menu interaktif Web CTF Attack Battery.
+    Menampilkan sub-menu mode attack: SQLi, Dir Enum, Brute-force, Vuln Scan, All-in-One.
+    """
+    if not check_auth(update) or not update.message:
+        return
+
+    if not context.args:
+        usage_text = (
+            "⚠️ <b>Format Perintah:</b> <code>/webattack &lt;url_atau_domain&gt;</code>\n\n"
+            "<b>Contoh:</b>\n"
+            "• <code>/webattack http://target.ctf.com</code>\n"
+            "• <code>/webattack http://192.168.1.100:8080/login.php</code>\n"
+            "• <code>/webattack https://challenge.picoctf.org</code>\n\n"
+            "<b>Setelah URL diset, pilih mode attack:</b>\n"
+            "1️⃣ Tech Fingerprint — Identifikasi teknologi web\n"
+            "2️⃣ SQL Injection    — Cari & dump credentials via SQLi\n"
+            "3️⃣ Dir Enumeration  — Temukan halaman & direktori tersembunyi\n"
+            "4️⃣ Login Brute-force — Coba kombinasi user/pass CTF umum\n"
+            "5️⃣ Vuln Scanner     — Scan kerentanan web umum (Nikto)\n"
+            "6️⃣ OSINT Domain     — Whois, DNS, subdomain recon\n"
+            "🔥 ALL-IN-ONE       — Semua tools sekaligus (paling lengkap)"
+        )
+        await update.message.reply_text(usage_text, parse_mode="HTML")
+        return
+
+    # Ambil URL, tambahkan scheme jika tidak ada
+    target_url = context.args[0]
+    if not target_url.startswith(("http://", "https://")):
+        target_url = "http://" + target_url
+
+    # Simpan target untuk callback buttons
+    user_id = update.effective_user.id
+    _webattack_targets[user_id] = target_url
+
+    # Tampilkan sub-menu attack
+    menu_text = (
+        f"<b>[ WEB ATTACK CTF MODULE ]</b>\n"
+        f"<code>TARGET: {html.escape(target_url)}</code>\n\n"
+        "<b>Pilih mode attack:</b>\n"
+        "1️⃣ <b>Tech Fingerprint</b> — WhatWeb + WAF detection\n"
+        "2️⃣ <b>SQL Injection</b>    — SQLmap auto-dump credentials\n"
+        "3️⃣ <b>Dir Enumeration</b>  — Gobuster + ffuf + dirb\n"
+        "4️⃣ <b>Login Brute-force</b> — Hydra HTTP/SSH brute-force\n"
+        "5️⃣ <b>Vuln Scanner</b>     — Nikto + Nmap web scripts\n"
+        "6️⃣ <b>OSINT Domain</b>     — Whois + dig + theHarvester\n"
+        "🔥 <b>ALL-IN-ONE</b>       — Full battery (semua tools paralel)\n\n"
+        "<i>⚠️ PERINGATAN: Gunakan HANYA pada target yang Anda miliki izin eksplisit untuk dites (CTF challenge, lab sendiri).</i>"
+    )
+    await update.message.reply_text(
+        menu_text,
+        parse_mode="HTML",
+        reply_markup=get_webattack_keyboard(target_url)
+    )
+
+
+async def scan_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Alias /scan → /webattack untuk kemudahan akses."""
+    await webattack_command(update, context)
+
+
+async def _run_webattack_mode(update_or_query, context: ContextTypes.DEFAULT_TYPE,
+                               target_url: str, mode: str):
+    """
+    Helper: Jalankan tools web attack berdasarkan mode yang dipilih.
+    mode: 'fingerprint' | 'sqli' | 'dir' | 'bruteforce' | 'vulnscan' | 'osint' | 'all'
+    """
+    from kiibot.core.tool_registry import CATEGORY_TOOL_MAP
+
+    # Tentukan tools berdasarkan mode
+    mode_config = {
+        "fingerprint": {
+            "title": "TECH FINGERPRINT",
+            "emoji": "🔍",
+            "tools": ["curl", "whatweb", "wafw00f", "nmap_web"],
+            "desc": "WhatWeb + WAF Detection + Nmap Web Scripts"
+        },
+        "sqli": {
+            "title": "SQL INJECTION ATTACK",
+            "emoji": "💉",
+            "tools": ["whatweb", "sqlmap", "sqlmap_full"],
+            "desc": "SQLmap auto-detect & dump credentials (level=5, forms scan)"
+        },
+        "dir": {
+            "title": "DIRECTORY ENUMERATION",
+            "emoji": "📂",
+            "tools": ["gobuster", "ffuf", "dirb", "nikto"],
+            "desc": "Gobuster + ffuf + dirb — temukan halaman & direktori tersembunyi"
+        },
+        "bruteforce": {
+            "title": "LOGIN BRUTE-FORCE",
+            "emoji": "🔐",
+            "tools": ["hydra_http_get", "curl", "whatweb"],
+            "desc": "Hydra HTTP Basic Auth brute-force dengan CTF mini-wordlist"
+        },
+        "vulnscan": {
+            "title": "VULNERABILITY SCANNER",
+            "emoji": "🛡️",
+            "tools": ["nikto", "nmap_web", "whatweb", "curl"],
+            "desc": "Nikto web scanner + Nmap vuln scripts"
+        },
+        "osint": {
+            "title": "OSINT DOMAIN RECON",
+            "emoji": "🌐",
+            "tools": ["whois", "dig", "nslookup"],
+            "desc": "Whois + DNS lookup — informasi pemilik domain & rekaman DNS"
+        },
+        "all": {
+            "title": "ALL-IN-ONE BATTERY",
+            "emoji": "🔥",
+            "tools": ["curl", "whatweb", "wafw00f", "nmap_web", "gobuster", "ffuf", "nikto", "sqlmap"],
+            "desc": "Full battery: Fingerprint + WAF + Dir + SQLi + Vuln Scan (8 tools paralel)"
+        },
+    }
+
+    cfg = mode_config.get(mode, mode_config["all"])
+    tools_list = cfg["tools"]
+    title = cfg["title"]
+    emoji = cfg["emoji"]
+    desc = cfg["desc"]
+
+    # Untuk OSINT, gunakan domain tanpa scheme
+    attack_target = target_url
+    if mode == "osint":
+        import urllib.parse
+        parsed = urllib.parse.urlparse(target_url)
+        attack_target = parsed.netloc or parsed.path or target_url
+
+    tools_display = ", ".join([f"<code>{t}</code>" for t in tools_list])
+
+    # Cari pesan untuk di-edit
+    msg_obj = None
+    if hasattr(update_or_query, 'message') and update_or_query.message:
+        msg_obj = update_or_query.message
+    elif hasattr(update_or_query, 'callback_query') and update_or_query.callback_query:
+        msg_obj = update_or_query.callback_query.message
+
+    if not msg_obj:
+        return
+
+    status_msg = await msg_obj.reply_text(
+        f"<b>[ {emoji} {title} ]</b>\n"
+        f"<code>TARGET: {html.escape(target_url)}</code>\n"
+        f"<code>MODE   : {html.escape(desc)}</code>\n"
+        f"<code>TOOLS  : {tools_display}</code>\n\n"
+        f"<code>STATUS: Menjalankan {len(tools_list)} tools secara paralel...</code>",
+        parse_mode="HTML"
+    )
+
+    try:
+        # Jalankan tools secara konkuren
+        tool_results = await execute_concurrent_tools(tools_list, attack_target)
+
+        # Update status
+        await status_msg.edit_text(
+            f"<b>[ {emoji} {title} — SELESAI ]</b>\n"
+            f"<code>TARGET: {html.escape(target_url)}</code>\n\n"
+            f"<code>STATUS: ✅ {len(tools_list)} tools selesai. Menyusun laporan AI...</code>",
+            parse_mode="HTML"
+        )
+
+        # Buat laporan dengan AI
+        ai = AIOrchestrator()
+        ai_sys_prompt = (
+            "Anda adalah Senior Web Pentester & CTF Solver yang ahli dalam Web Exploitation.\n"
+            f"Target URL: {target_url}\n"
+            f"Mode Attack yang dijalankan: {title}\n\n"
+            "Tugas: Analisis output tools di bawah ini dan buat laporan profesional yang mencakup:\n"
+            "1. 🔍 **TEMUAN UTAMA**: Apa yang ditemukan (teknologi, kerentanan, direktori, credential)\n"
+            "2. 💉 **POTENSI EKSPLOITASI**: Langkah konkret untuk mendapatkan username/password/flag\n"
+            "3. 🛠️ **PERINTAH LANJUTAN**: Command spesifik yang bisa dicoba selanjutnya di VPS\n"
+            "4. 🚩 **APAKAH ADA FLAG?**: Jika ada string yang terlihat seperti flag CTF, highlight dengan jelas\n\n"
+            "ATURAN: Berikan analisis faktual berdasarkan output tools. Jangan mengarang."
+        )
+
+        if ai.is_available():
+            ai_report = await ai.analyze_results(
+                tool_results,
+                previous_context=f"Web Attack {title} pada {target_url}"
+            )
+        else:
+            # Fallback tanpa AI: format output tool langsung
+            ai_report = f"<b>[ Hasil Tools Raw Output ]</b>\n\n"
+            for tool_name, tool_out in tool_results.items():
+                if tool_out and len(str(tool_out)) > 10:
+                    ai_report += f"<b>— {tool_name} —</b>\n<code>{html.escape(str(tool_out)[:400])}</code>\n\n"
+            ai_report += "\n<i>Note: AI tidak aktif. Isi configs/ai_keys.json untuk laporan analisis mendalam.</i>"
+
+        # Format final report
+        full_reply = (
+            f"<b>[ {emoji} WEB ATTACK REPORT: {title} ]</b>\n"
+            f"<code>TARGET: {html.escape(target_url)}</code>\n\n"
+        )
+
+        # Cek apakah ada credential/flag yang ditemukan di output mentah
+        raw_output_str = str(tool_results)
+        cred_patterns = re.findall(
+            r"(?:password|passwd|pass|pwd|credential)[\s:=]+([\w@!#$%^&*()_+=-]{4,30})",
+            raw_output_str, re.IGNORECASE
+        )
+        flag_patterns = re.findall(
+            r"((?:CTF|FLAG|KIIBOT|picoCTF|HTB|THM)\{[^}]+\})",
+            raw_output_str, re.IGNORECASE
+        )
+
+        if flag_patterns:
+            full_reply += f"🚩 <b>FLAG DITEMUKAN: {html.escape(', '.join(set(flag_patterns)))}</b>\n\n"
+        if cred_patterns:
+            unique_creds = list(set(cred_patterns))[:5]
+            full_reply += f"🔑 <b>POTENTIAL CREDS: {html.escape(', '.join(unique_creds))}</b>\n\n"
+
+        full_reply += f"\n{ai_report}"
+
+        if len(full_reply) > 3800:
+            # Kirim sebagai file
+            import tempfile
+            with tempfile.NamedTemporaryFile(mode='w', suffix='_webattack.md',
+                                            delete=False, encoding='utf-8') as f:
+                f.write(full_reply)
+                tmp_path = f.name
+            with open(tmp_path, 'rb') as doc:
+                await msg_obj.reply_document(
+                    document=doc,
+                    caption=f"📋 <b>Web Attack Report: {html.escape(title)} — {html.escape(target_url[:50])}</b>",
+                    parse_mode="HTML"
+                )
+        else:
+            await status_msg.edit_text(full_reply, parse_mode="HTML")
+
+        # Tampilkan kembali sub-menu untuk serangan lanjutan
+        await msg_obj.reply_text(
+            f"✅ <b>{title} selesai.</b> Pilih mode lain untuk melanjutkan:\n"
+            f"<code>Target: {html.escape(target_url)}</code>",
+            parse_mode="HTML",
+            reply_markup=get_webattack_keyboard(target_url)
+        )
+
+    except Exception as e:
+        logger.error(f"Error _run_webattack_mode ({mode}): {e}")
+        await status_msg.edit_text(
+            f"❌ <b>Error saat menjalankan {title}:</b>\n<code>{html.escape(str(e))}</code>",
+            parse_mode="HTML"
+        )
+
+
 async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Menangani interaksi klik tombol keyboard."""
+    """Menangani interaksi klik tombol keyboard — termasuk menu numbered dan webattack sub-menu."""
     query = update.callback_query
     if not query:
         return
@@ -593,7 +899,72 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
     await query.answer()
 
     data = query.data
-    if data == "btn_soc":
+    user_id = update.effective_user.id if update.effective_user else 0
+
+    # ── Menu Utama Numbered ───────────────────────────────────────────────────
+    if data == "menu_main":
+        await query.message.reply_text(
+            "🏠 <b>Kembali ke Menu Utama</b>\n"
+            "Gunakan /start untuk menampilkan menu lengkap.",
+            parse_mode="HTML",
+            reply_markup=get_main_keyboard()
+        )
+
+    elif data == "menu_file":
+        await query.message.reply_text(
+            "1️⃣ <b>[ MODE: Analisis File CTF ]</b>\n\n"
+            "Kirimkan file langsung ke chat ini:\n"
+            "» <code>.pcap / .pcapng</code> → Expert Wireshark Battery\n"
+            "» <code>.log / .txt</code>    → Log Forensics Battery\n"
+            "» <code>.png / .jpg</code>    → AI Vision + Stego Tools\n"
+            "» <code>.elf / .bin</code>    → Binary Reversing Tools\n"
+            "» <code>.zip / .tar</code>    → Archive Forensics\n"
+            "» <code>.mem / .dmp</code>    → Memory Forensics (Volatility)\n\n"
+            "<i>Cukup kirim file-nya, bot akan otomatis mendeteksi dan menjalankan tools yang sesuai!</i>",
+            parse_mode="HTML"
+        )
+
+    elif data == "menu_webattack":
+        await query.message.reply_text(
+            "2️⃣ <b>[ MODE: Web Attack CTF ]</b>\n\n"
+            "Kirimkan URL atau domain target:\n"
+            "<code>/webattack http://target.ctf.com</code>\n\n"
+            "<b>Kemampuan attack:</b>\n"
+            "💉 SQL Injection (sqlmap) — dump username &amp; password\n"
+            "📂 Dir Enumeration (gobuster/ffuf) — cari halaman tersembunyi\n"
+            "🔐 Login Brute-force (hydra) — coba password CTF umum\n"
+            "🔍 Tech Fingerprint (whatweb) — identifikasi teknologi\n"
+            "🛡️ Vuln Scan (nikto) — cari kerentanan web umum\n"
+            "🌐 OSINT Domain (whois/dig) — info domain &amp; DNS\n"
+            "🔥 ALL-IN-ONE — semua sekaligus!\n\n"
+            "<i>⚠️ Hanya gunakan untuk target yang Anda miliki izin eksplisit (CTF challenge).</i>",
+            parse_mode="HTML"
+        )
+
+    elif data == "menu_decode":
+        await query.message.reply_text(
+            "3️⃣ <b>[ MODE: Decode &amp; Crypto ]</b>\n\n"
+            "Gunakan command:\n"
+            "» <code>/decode &lt;teks/hash&gt;</code> — Auto-detect &amp; decode\n"
+            "» <code>/analyze &lt;payload&gt;</code>  — Deep AI analysis\n\n"
+            "<b>Format yang didukung:</b>\n"
+            "• MD5 / SHA1 / SHA256 hash\n"
+            "• Base64 / Base32 / Base58\n"
+            "• Hex / Octal / Binary\n"
+            "• ROT13 / ROT47 / Caesar Cipher\n"
+            "• XOR (brute-force key 1-255)\n"
+            "• JWT Token (decode payload)\n"
+            "• URL Encoding / HTML Entities\n"
+            "• Morse Code\n\n"
+            "<i>Contoh: <code>/decode aGVsbG8gd29ybGQ=</code></i>",
+            parse_mode="HTML"
+        )
+
+    elif data == "menu_soc":
+        await triage_command(update, context)
+
+    # ── Legacy buttons ────────────────────────────────────────────────────────
+    elif data == "btn_soc":
         soc_text = (
             "🛡️ <b>SOC Analyst Workflow (Blue Team):</b>\n\n"
             "1. <b>Triage:</b> Identifikasi tingkat bahaya alert (Gunakan /triage).\n"
@@ -626,6 +997,30 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
     elif data == "btn_help":
         await help_command(update, context)
 
+    # ── Web Attack Sub-menu ───────────────────────────────────────────────────
+    elif data.startswith("wa_"):
+        # Ambil target URL yang tersimpan untuk user ini
+        target_url = _webattack_targets.get(user_id, "")
+        if not target_url:
+            await query.message.reply_text(
+                "⚠️ <b>Sesi Web Attack telah kadaluarsa.</b>\n"
+                "Jalankan ulang: <code>/webattack &lt;url&gt;</code>",
+                parse_mode="HTML"
+            )
+            return
+
+        mode_map = {
+            "wa_fingerprint": "fingerprint",
+            "wa_sqli": "sqli",
+            "wa_dir": "dir",
+            "wa_bruteforce": "bruteforce",
+            "wa_vulnscan": "vulnscan",
+            "wa_osint": "osint",
+            "wa_all": "all",
+        }
+        mode = mode_map.get(data, "all")
+        await _run_webattack_mode(update, context, target_url, mode)
+
 
 # =====================================================================
 # MESSAGE HANDLERS DENGAN CONTEXT GUARDRAIL
@@ -651,8 +1046,16 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     logger.info(f"[IN-CONTEXT] Memproses pesan: {text[:50]}")
 
-    # 1. Coba decode terlebih dahulu jika tampak seperti cipher/hash/base64
+    # 1. Cek apakah teks adalah URL/Domain untuk Web Attack
     clean_strip = text.strip()
+    is_url = re.match(r"^(https?://)?[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}(/.*)?$", clean_strip)
+    if is_url and " " not in clean_strip:
+        # Jika bukan sekadar IP biasa (harus domain atau URL yang valid)
+        context.args = [clean_strip]
+        await webattack_command(update, context)
+        return
+
+    # 2. Coba decode terlebih dahulu jika tampak seperti cipher/hash/base64
     looks_like_encoded = (
         re.fullmatch(r"[a-fA-F0-9]{32}|[a-fA-F0-9]{40}|[a-fA-F0-9]{64}", clean_strip) or
         (len(clean_strip) >= 12 and re.fullmatch(r"[A-Za-z0-9+/=]+", clean_strip) and " " not in clean_strip) or
@@ -1080,31 +1483,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     parse_mode="HTML"
                 )
                 stego_tools = ["exiftool", "strings", "binwalk", "zsteg", "steghide"]
-                stego_results = await execute_concurrent_tools(stego_tools, file_path)
-                stego_summary = "\n\n<b>🧰 Hasil Ekstraksi Tools Stego Lokal (VPS):</b>\n"
-                for tname, tout in stego_results.items():
-                    if tout and "error" not in tout.lower() and "not found" not in tout.lower():
-                        stego_summary += f"🔹 <b>{tname}:</b>\n<code>{html.escape(str(tout)[:200])}</code>\n"
-
-            # Kirim hasil Laporan Detail Gambar Soal
-            await status_card.delete()
-            final_message = vision_report
-            if stego_summary:
-                final_message += stego_summary
-
-            if len(final_message) > 3800:
-                report_path = f"{file_path}_vision_report.md"
-                with open(report_path, "w", encoding="utf-8") as f:
-                    f.write(final_message)
-                await update.message.reply_document(
-                    document=open(report_path, "rb"),
-                    caption="📋 <b>Laporan Detail Analisis Gambar Soal CTF & Rekomendasi Tools VPS</b>",
-                    parse_mode="HTML"
-                )
-            else:
-                await update.message.reply_text(final_message, parse_mode="Markdown")
-
-        else:
+                steg        else:
             # Fallback jika AI belum aktif: Jalankan tools stego lokal di VPS
             await status_card.edit_text(
                 "<b>[ RUNNING LOCAL STEGO TOOLS ]</b>\n"
@@ -1145,6 +1524,9 @@ def main():
     app.add_handler(CommandHandler("decode", decode_command))
     app.add_handler(CommandHandler("analyze", analyze_command))
     app.add_handler(CommandHandler("report", report_command))
+    # Web Attack CTF Module
+    app.add_handler(CommandHandler("webattack", webattack_command))
+    app.add_handler(CommandHandler("scan", scan_command))
 
     # Routing Callback Query (Tombol Interaktif)
     app.add_handler(CallbackQueryHandler(handle_callback_query))

@@ -326,6 +326,24 @@ TOOL_REGISTRY = {
             "when_to_use": "URL target web CTF — cek header, redirect, dan isi halaman.",
             "mitre_technique": "T1071.001"
         },
+        "whatweb": {
+            "cmd": ["whatweb", "--no-errors", "-a", "3"],
+            "args_append_target": True,
+            "desc": "Fingerprint teknologi web: CMS, framework, server, versi. Langkah awal wajib sebelum attack.",
+            "output_limit": 2000,
+            "timeout": 30.0,
+            "when_to_use": "URL target web — identifikasi WordPress, PHP, Apache, Nginx, framework, dll.",
+            "mitre_technique": "T1592.002"
+        },
+        "wafw00f": {
+            "cmd": ["wafw00f"],
+            "args_append_target": True,
+            "desc": "Deteksi Web Application Firewall (WAF). Penting sebelum SQLi/XSS attack untuk tahu ada proteksi atau tidak.",
+            "output_limit": 1500,
+            "timeout": 30.0,
+            "when_to_use": "URL target sebelum attack — cek apakah ada Cloudflare, ModSecurity, AWS WAF, dll.",
+            "mitre_technique": "T1595.002"
+        },
         "sqlmap": {
             "cmd": ["sqlmap", "-u", None, "--batch", "--level=3", "--risk=2", "--threads=4"],
             "args_target_index": 2,
@@ -333,6 +351,16 @@ TOOL_REGISTRY = {
             "output_limit": 2000,
             "timeout": 120.0,
             "when_to_use": "URL dengan parameter GET/POST yang dicurigai vulnerable terhadap SQLi.",
+            "mitre_technique": "T1190"
+        },
+        "sqlmap_full": {
+            "cmd": ["sqlmap", "-u", None, "--batch", "--level=5", "--risk=3", "--threads=4",
+                    "--dbs", "--dump-all", "--exclude-sysdbs", "--forms"],
+            "args_target_index": 2,
+            "desc": "SQLmap mode FULL: enumerate semua database, dump tabel users, cari username & password. HANYA untuk target yang diizinkan.",
+            "output_limit": 3000,
+            "timeout": 180.0,
+            "when_to_use": "Soal CTF SQLi — dump semua data termasuk tabel users, kredensial, dan flag.",
             "mitre_technique": "T1190"
         },
         "nikto": {
@@ -353,6 +381,15 @@ TOOL_REGISTRY = {
             "when_to_use": "URL target web CTF — mencari direktori tersembunyi seperti /admin, /backup, /flag.",
             "mitre_technique": "T1595.003"
         },
+        "dirb": {
+            "cmd": ["dirb", None, "/usr/share/wordlists/dirb/common.txt", "-S", "-r"],
+            "args_target_index": 1,
+            "desc": "Directory brute-forcer klasik. Lebih lambat dari gobuster tapi output lebih verbose dengan detail kode HTTP.",
+            "output_limit": 2000,
+            "timeout": 90.0,
+            "when_to_use": "Alternatif gobuster, terutama saat gobuster tidak tersedia atau perlu detail response.",
+            "mitre_technique": "T1595.003"
+        },
         "ffuf": {
             "cmd": ["ffuf", "-u", None, "-w", "/usr/share/wordlists/dirb/common.txt:FUZZ", "-mc", "200,301,302,403", "-c", "-s"],
             "args_target_index": 2,
@@ -361,6 +398,36 @@ TOOL_REGISTRY = {
             "timeout": 60.0,
             "when_to_use": "Web fuzzing untuk directory, parameter, atau virtual host enumeration.",
             "mitre_technique": "T1595.003"
+        },
+        "hydra_http_get": {
+            "cmd": ["hydra", "-L", "/usr/share/wordlists/ctf_mini.txt", "-P",
+                    "/usr/share/wordlists/ctf_mini.txt", "-t", "4", "-f"],
+            "args_append_target": True,
+            "desc": "Hydra: Login brute-force HTTP Basic Auth menggunakan CTF mini-wordlist. Temukan username & password.",
+            "output_limit": 2000,
+            "timeout": 120.0,
+            "when_to_use": "Target HTTP Basic Auth — coba kombinasi username & password umum CTF.",
+            "mitre_technique": "T1110.001"
+        },
+        "hydra_ssh": {
+            "cmd": ["hydra", "-L", "/usr/share/wordlists/ctf_mini.txt", "-P",
+                    "/usr/share/wordlists/ctf_mini.txt", "-t", "4", "-f", "-s", "22"],
+            "args_append_target": True,
+            "desc": "Hydra: SSH login brute-force menggunakan CTF mini-wordlist.",
+            "output_limit": 2000,
+            "timeout": 120.0,
+            "when_to_use": "Target SSH yang diizinkan — coba kombinasi username & password umum CTF.",
+            "mitre_technique": "T1110.001"
+        },
+        "nmap_web": {
+            "cmd": ["nmap", "-sV", "-p", "80,443,8080,8443,8888,3000,5000,9000",
+                    "--script=http-title,http-headers,http-methods"],
+            "args_append_target": True,
+            "desc": "Nmap port scan khusus web: cek port HTTP/HTTPS, dapatkan HTTP title & headers.",
+            "output_limit": 2000,
+            "timeout": 60.0,
+            "when_to_use": "Domain/IP target — temukan semua web service yang berjalan.",
+            "mitre_technique": "T1046"
         },
         "jq": {
             "cmd": ["jq", "."],
@@ -585,7 +652,12 @@ CATEGORY_TOOL_MAP = {
     "binary_elf":          ["file", "checksec", "strings", "objdump", "readelf", "ltrace", "strace"],
     "archive":             ["file", "strings", "binwalk", "john"],
     "hash_text":           ["hashid", "hash_identifier", "john", "hashcat"],
-    "web_url":             ["curl", "gobuster", "ffuf", "nikto"],
+    "web_url":             ["curl", "whatweb", "wafw00f", "gobuster", "ffuf", "nikto"],
+    "web_attack":          ["curl", "whatweb", "wafw00f", "nmap_web", "gobuster", "nikto", "sqlmap"],
+    "web_sqli":            ["sqlmap", "sqlmap_full", "curl", "whatweb"],
+    "web_dir":             ["gobuster", "dirb", "ffuf", "nikto", "curl"],
+    "web_bruteforce":      ["hydra_http_get", "hydra_ssh", "curl", "whatweb"],
+    "web_full_battery":    ["curl", "whatweb", "wafw00f", "nmap_web", "gobuster", "ffuf", "nikto", "sqlmap"],
     "osint_domain":        ["whois", "dig", "nslookup", "theHarvester"],
     "osint_github":        ["trufflehog", "gitleaks"],
     "rsa_crypto":          ["openssl", "rsactftool"],
