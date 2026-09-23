@@ -145,31 +145,15 @@ class AIOrchestrator:
         if not HAS_OPENAI or not AsyncOpenAI:
             return None
 
-        is_gemini = "generativelanguage.googleapis.com" in self.base_url
-
-        if is_gemini:
-            # Key format AQ.Ab8... (GCP Service Account bound key) membutuhkan
-            # x-goog-api-key header TANPA Authorization Bearer agar tidak konflik.
-            # Key format AIzaSy... (standard API key) bisa pakai keduanya.
-            is_new_format = api_key.startswith("AQ.")
-            headers = {"x-goog-api-key": api_key}
-
-            if is_new_format:
-                # Gunakan dummy api_key agar SDK tidak kirim "Authorization: Bearer AQ..."
-                # yang akan ditolak Google sebagai ACCESS_TOKEN_TYPE_UNSUPPORTED
-                return AsyncOpenAI(
-                    api_key="GEMINI",
-                    base_url=self.base_url,
-                    default_headers=headers
-                )
-            else:
-                return AsyncOpenAI(
-                    api_key=api_key,
-                    base_url=self.base_url,
-                    default_headers=headers
-                )
-
-        return AsyncOpenAI(api_key=api_key, base_url=self.base_url)
+        # Endpoint openai/ dari Gemini sudah didesain menerima api_key via 
+        # header 'Authorization: Bearer {api_key}' bawaan SDK OpenAI.
+        # Penggunaan header tambahan seperti x-goog-api-key sering menyebabkan
+        # HTTP 401 Unauthorized karena konflik autentikasi ganda, terutama
+        # untuk key format baru (AQ.xxx).
+        return AsyncOpenAI(
+            api_key=api_key,
+            base_url=self.base_url
+        )
 
     def _is_quota_or_auth_error(self, error: Exception) -> bool:
         """Mendeteksi apakah error disebabkan oleh kuota habis, rate limit, atau token invalid."""
