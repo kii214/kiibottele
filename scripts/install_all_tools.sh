@@ -46,8 +46,6 @@ $SUDO apt-get install -y \
   binutils \
   binwalk \
   build-essential \
-  bulk-extractor \
-  checksec \
   clang \
   curl \
   dirb \
@@ -79,6 +77,7 @@ $SUDO apt-get install -y \
   python3-pip \
   python3-dev \
   python3-venv \
+  python3-full \
   radare2 \
   rsync \
   sleuthkit \
@@ -110,9 +109,11 @@ $SUDO apt-get install -y \
   nikto \
   || true
 
-echo -e "\n${YELLOW}[+] Step 3: Installing optional Kali-specific tools (graceful skip jika tidak tersedia)...${NC}"
+echo -e "\n${YELLOW}[+] Step 3: Installing optional Kali/Extra-specific tools (graceful skip jika tidak tersedia)...${NC}"
 OPTIONAL_TOOLS=(
   apktool
+  bulk-extractor
+  checksec
   dnsrecon
   dsniff
   ettercap-text-only
