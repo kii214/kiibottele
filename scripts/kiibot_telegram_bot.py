@@ -687,8 +687,6 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
     try:
-        # Jalankan decode dan AI secara paralel
-        decode_task = asyncio.get_event_loop().run_in_executor(None, decode_all, text)
         ai = AIOrchestrator()
 
         sys_prompt = (
@@ -703,9 +701,6 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "ATURAN MUTLAK: DILARANG KERAS MENGARANG, MENGHALUSINASIKAN, ATAU BERASUMSI. "
             "Hanya buat pernyataan berdasarkan fakta teknis yang nyata."
         )
-
-        # Jalankan AI analysis
-        ai_task = ai.ask_ai(user_question=f"Analisis teks CTF/SOC ini secara mendalam:\n\n```\n{text}\n```", system_prompt=sys_prompt) if ai.is_available() else None
 
         # Dapatkan hasil decode
         decode_results = await asyncio.get_event_loop().run_in_executor(None, decode_all, text)
@@ -726,26 +721,24 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 flag_found = flag_m.group(0)
                 break
 
-        if ai_task:
-            ai_report = await ai_task
-        if ai_task:
-            ai_report = await ai_task
-            full_reply = (
-                f"<b>[ DEEP ANALYSIS REPORT ]</b>\n"
-                f"🔎 <b>Input:</b> <code>{html.escape(text[:100])}</code>\n"
+        full_reply = (
+            f"<b>[ DEEP ANALYSIS REPORT ]</b>\n"
+            f"🔎 <b>Input:</b> <code>{html.escape(text[:100])}</code>\n"
+        )
+        if flag_found:
+            full_reply += f"\n<b>[ FLAG DITEMUKAN ]</b> <b>{html.escape(flag_found)}</b>\n"
+        if decode_section:
+            await status_msg.edit_text(full_reply + decode_section + "\n<i>AI sedang menyusun laporan mendalam...</i>", parse_mode="HTML")
+
+        # Jalankan AI analysis
+        if ai.is_available():
+            ai_report = await ai.ask_ai(
+                user_question=f"Analisis teks CTF/SOC ini secara mendalam:\n\n```\n{text}\n```",
+                system_prompt=sys_prompt
             )
-            if flag_found:
-                full_reply += f"\n<b>[ FLAG DITEMUKAN ]</b> <b>{html.escape(flag_found)}</b>\n"
-            if decode_section:
-                await status_msg.edit_text(full_reply + decode_section + "\n<i>AI sedang menyusun laporan mendalam...</i>", parse_mode="HTML")
-            await status_msg.edit_text(full_reply + f"\n{ai_report}", parse_mode="Markdown")
+            await status_msg.edit_text(full_reply + decode_section + f"\n{ai_report}", parse_mode="Markdown")
         else:
-            simple_reply = (
-                f"<b>[ DECODE ANALYSIS RESULT ]</b>\n"
-                f"🔎 <b>Input:</b> <code>{html.escape(text[:100])}</code>\n"
-            )
-            if flag_found:
-                simple_reply += f"\n<b>[ FLAG ]</b> <b>{html.escape(flag_found)}</b>\n"
+            simple_reply = full_reply
             simple_reply += decode_section or "\n<i>Tidak ada encoding yang dikenali.</i>"
             simple_reply += "\n\n<i>Note: AI tidak aktif — isi configs/ai_keys.json untuk analisis mendalam.</i>"
             await status_msg.edit_text(simple_reply, parse_mode="HTML")
@@ -1418,7 +1411,24 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
         )
 
     elif data == "menu_soc":
-        await triage_command(update, context)
+        triage_text = (
+            "<b>[ SOC ALERT TRIAGE SIMULATOR ]</b>\n"
+            "Ditemukan 4 alert bersamaan pada SIEM Dashboard:\n\n"
+            "[CRITICAL] Outbound Traffic Anomaly\n"
+            "» Source : Database Server (Production)\n"
+            "» Action : Prioritas Utama! Segera blokir koneksi keluar &amp; isolasi DB.\n\n"
+            "[HIGH] SQL Injection Payload\n"
+            "» Source : Public Web Application\n"
+            "» Action : Cek response status code di Nginx log; pastikan WAF memblokir payload.\n\n"
+            "[MEDIUM] Multiple Failed Logins\n"
+            "» Source : Workstation HRD\n"
+            "» Action : Potensi brute-force. Monitor lockout policy.\n\n"
+            "[LOW] Malware Dropper Quarantined\n"
+            "» Source : Laptop Marketing\n"
+            "» Action : Ancaman sudah tertahan (contained). Verifikasi status karantina.\n\n"
+            "<i>SOP L2: Selesaikan investigasi status CRITICAL sebelum berpindah ke severity lebih rendah.</i>"
+        )
+        await query.message.reply_text(triage_text, parse_mode="HTML")
 
     # ── Legacy buttons ────────────────────────────────────────────────────────
     elif data == "btn_soc":
@@ -1432,7 +1442,24 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
         await query.message.reply_text(soc_text, parse_mode="HTML")
 
     elif data == "btn_triage":
-        await triage_command(update, context)
+        triage_text = (
+            "<b>[ SOC ALERT TRIAGE SIMULATOR ]</b>\n"
+            "Ditemukan 4 alert bersamaan pada SIEM Dashboard:\n\n"
+            "[CRITICAL] Outbound Traffic Anomaly\n"
+            "» Source : Database Server (Production)\n"
+            "» Action : Prioritas Utama! Segera blokir koneksi keluar &amp; isolasi DB.\n\n"
+            "[HIGH] SQL Injection Payload\n"
+            "» Source : Public Web Application\n"
+            "» Action : Cek response status code di Nginx log; pastikan WAF memblokir payload.\n\n"
+            "[MEDIUM] Multiple Failed Logins\n"
+            "» Source : Workstation HRD\n"
+            "» Action : Potensi brute-force. Monitor lockout policy.\n\n"
+            "[LOW] Malware Dropper Quarantined\n"
+            "» Source : Laptop Marketing\n"
+            "» Action : Ancaman sudah tertahan (contained). Verifikasi status karantina.\n\n"
+            "<i>SOP L2: Selesaikan investigasi status CRITICAL sebelum berpindah ke severity lebih rendah.</i>"
+        )
+        await query.message.reply_text(triage_text, parse_mode="HTML")
 
     elif data == "btn_mitre_list":
         avail = ", ".join([f"<code>{t}</code>" for t in get_all_techniques()])
@@ -1443,16 +1470,113 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
         )
 
     elif data == "btn_tools":
-        await tools_command(update, context)
+        total_tools = sum(len(v) for v in TOOL_REGISTRY.values())
+        total_cats = len(TOOL_REGISTRY)
+        cat_icons = {
+            "forensics": "🔬", "steganography": "🖼️", "cryptography": "🔐",
+            "network": "🌐", "log_analysis": "📋", "web": "⚔️",
+            "reverse_engineering": "⚙️", "osint": "🌍", "osint_github": "🐙",
+            "soc_triage": "🛡️", "siem_integration": "📡", "malware_analysis": "🦠",
+            "exploit_dev": "💣", "password_attacks": "🔑", "container_security": "📦",
+        }
+        tools_summary = (
+            f"<b>[ 🛠️ KIIBOT PRO — TOOL REGISTRY ]</b>\n"
+            f"<code>TOTAL: {total_tools} TOOLS | {total_cats} KATEGORI</code>\n"
+            "━" * 20 + "\n\n"
+        )
+        for category, tools_dict in TOOL_REGISTRY.items():
+            icon = cat_icons.get(category, "🔧")
+            count = len(tools_dict)
+            tool_names = ", ".join(list(tools_dict.keys())[:6])
+            extras = f" +{count - 6} more" if count > 6 else ""
+            cat_label = category.upper().replace('_', ' ')
+            tools_summary += (
+                f"{icon} <b>{html.escape(cat_label)} ({count} tools):</b>\n"
+                f"  <code>{html.escape(tool_names)}{extras}</code>\n\n"
+            )
+        await query.message.reply_text(tools_summary, parse_mode="HTML")
 
     elif data == "btn_doctor":
-        await doctor_command(update, context)
+        status_msg = await query.message.reply_text(
+            "🩺 <i>Memeriksa ketersediaan seluruh tools di lingkungan host/VPS...</i>",
+            parse_mode="HTML"
+        )
+        try:
+            report = await asyncio.get_event_loop().run_in_executor(None, check_all_tools_availability)
+            installed_count = report["installed_count"]
+            missing_count = report["missing_count"]
+            total = report["total_tools"]
+            installed_pct = int((installed_count / total) * 100) if total > 0 else 0
+            filled_blocks = int(installed_pct / 10)
+            progress_bar = "█" * filled_blocks + "░" * (10 - filled_blocks)
+            reply = (
+                "<b>🩺 KIIBOT VPS DIAGNOSTICS</b>\n"
+                f"<code>HEALTH: [{progress_bar}] {installed_pct}% ({installed_count}/{total} Tools)</code>\n"
+                "─" * 25 + "\n\n"
+            )
+            for cat, cat_data in report["categories"].items():
+                cat_installed = cat_data["installed"]
+                cat_missing = cat_data["missing"]
+                cat_icon = "🟢" if not cat_missing else ("🟡" if cat_installed else "🔴")
+                reply += f"<b>{cat_icon} KATEGORI: {cat.upper()}</b>\n"
+                if cat_installed:
+                    reply += f"  ✓ <b>Installed:</b> <code>{', '.join(cat_installed[:8])}</code>\n"
+                if cat_missing:
+                    reply += f"  ✗ <b>Missing:</b> <i>{', '.join(cat_missing[:6])}</i>\n"
+                reply += "\n"
+            if missing_count > 0:
+                reply += "<i>💡 Install missing tools: <code>sudo bash install.sh</code></i>"
+            await status_msg.edit_text(reply, parse_mode="HTML")
+        except Exception as e:
+            await status_msg.edit_text(f"❌ Error diagnosa: <code>{html.escape(str(e))}</code>", parse_mode="HTML")
 
     elif data == "btn_aikeys":
-        await aikeys_command(update, context)
+        # aikeys_command butuh update.message — buat pesan via query.message
+        ai = AIOrchestrator()
+        status = ai.get_status_info()
+        total = status["total_keys"]
+        active = status["active_key_index"]
+        exhausted = status["exhausted_keys_count"]
+        model = status["model"]
+        avail = status["available"]
+        badge = "ACTIVE & READY" if avail else "INACTIVE / QUOTA EXHAUSTED"
+        reply = (
+            "<b>[ AI MULTI-KEY POOL STATUS ]</b>\n"
+            f"<code>STATUS: {badge}</code>\n\n"
+            f"» <b>Model          :</b> {model}\n"
+            f"» <b>Total API Keys :</b> {total} Keys\n"
+            f"» <b>Active Key     :</b> Key #{active}\n"
+            f"» <b>Exhausted Keys :</b> {exhausted} Keys\n"
+            f"» <b>Remaining Keys :</b> {status['remaining_keys']} Keys\n\n"
+            "<b>[ Cascading Failover Protocol ]</b>\n"
+            "- KIIBOT selalu menggunakan Key pertama yang aktif.\n"
+            "- Jika Key error (429/insufficient quota), sistem beralih otomatis ke Key berikutnya.\n"
+            "- Maksimal 10 Keys didukung secara paralel.\n\n"
+            "<i>Konfigurasi keys: <code>configs/ai_keys.json</code></i>"
+        )
+        await query.message.reply_text(reply, parse_mode="HTML")
 
     elif data == "btn_help":
-        await help_command(update, context)
+        help_text = (
+            "<b>[ KIIBOT COMMAND REFERENCE ]</b>\n\n"
+            "<b>» Navigasi & SOC Operations</b>\n"
+            "  <code>/start</code>  : Menampilkan menu utama & status\n"
+            "  <code>/help</code>   : Daftar referensi perintah ini\n"
+            "  <code>/soc</code>    : Panduan 4 tahap alur kerja SOC Analyst\n"
+            "  <code>/triage</code> : Simulator insiden alert & penentuan prioritas\n"
+            "  <code>/tools</code>  : Ringkasan 40+ CTF & SOC tools yang terpasang\n"
+            "  <code>/doctor</code> : Diagnosa tools VPS (cek yang terinstall vs missing)\n"
+            "  <code>/aikeys</code> : Cek status cascading Multi-API Keys Pool\n\n"
+            "<b>» Investigasi & Auto-Solve</b>\n"
+            "  <code>/mitre [ID]</code>  : Detail teknik MITRE (contoh: <code>/mitre T1140</code>)\n"
+            "  <code>/decode [txt]</code>: Analisis instan cipher/hash/JWT/encoding\n"
+            "  <code>/analyze [..]</code>: Deep analysis AI expert bertubi-tubi\n\n"
+            "<b>» Analisis Berkas Langsung</b>\n"
+            "Kirim dokumen langsung ke bot (<code>.pcap</code>, <code>.png</code>, <code>.elf</code>, <code>.log</code>).\n"
+            "Bot akan otomatis mengorkestrasi tools secara paralel.\n\n"
+            "<i>Catatan: Bot dilindungi guardrail aktif. Pesan di luar konteks siber akan diabaikan.</i>"
+        )
+        await query.message.reply_text(help_text, parse_mode="HTML", reply_markup=get_main_keyboard())
 
     # ── Web Attack Sub-menu ───────────────────────────────────────────────────
     elif data.startswith("wa_"):
