@@ -1339,6 +1339,9 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     "<i>💡 Note: Seluruh 71 tools Linux di VPS Anda siap dieksekusi 100% tanpa hambatan.</i>"
                 )
                 await status_msg.edit_text(fallback_chat, parse_mode="HTML")
+        except Exception as e:
+            logger.error(f"Error preparing AI context: {e}")
+            await status_msg.edit_text("❌ Error processing request.")
     else:
         results = decode_all(text)
         if results:
