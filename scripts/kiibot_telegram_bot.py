@@ -989,6 +989,7 @@ async def _run_webattack_mode(update_or_query, context: ContextTypes.DEFAULT_TYP
             "ATURAN: Berikan analisis faktual berdasarkan output tools. Jangan mengarang."
         )
 
+        ai_mode_used = "AI-Assisted"
         if ai.is_available():
             try:
                 ai_report = await ai.analyze_results(
@@ -996,16 +997,12 @@ async def _run_webattack_mode(update_or_query, context: ContextTypes.DEFAULT_TYP
                     previous_context=f"Web Attack {title} pada {target_url}"
                 )
             except Exception as e_ai:
-                ai_report = f"⚠️ <i>AI Analysis Error ({e_ai}). Menampilkan hasil eksekusi tools mentah:</i>\n\n"
-                for tool_name, tool_out in tool_results.items():
-                    if tool_out:
-                        ai_report += f"<b>[ 🛠️ TOOL: {tool_name.upper()} ]</b>\n<code>{html.escape(str(tool_out)[:500])}</code>\n\n"
+                logger.warning(f"AI gagal ({e_ai}), beralih ke structured fallback report")
+                ai_mode_used = "Structured Fallback (AI Unavailable)"
+                ai_report = _build_fallback_report(tool_results, target_url, title)
         else:
-            ai_report = "<b>[ 🛠️ HASIL EKSEKUSI TOOLS LINUX REAL-TIME ]</b>\n\n"
-            for tool_name, tool_out in tool_results.items():
-                if tool_out and len(str(tool_out)) > 5:
-                    ai_report += f"<b>🔹 Tool {tool_name.upper()}:</b>\n<code>{html.escape(str(tool_out)[:600])}</code>\n\n"
-            ai_report += "<i>💡 Catatan: Hasil di atas adalah output eksekusi langsung dari binary tools Linux yang terpasang di VPS Anda.</i>"
+            ai_mode_used = "Structured Fallback (No API Key)"
+            ai_report = _build_fallback_report(tool_results, target_url, title)
 
         # Format final report
         full_reply = (
