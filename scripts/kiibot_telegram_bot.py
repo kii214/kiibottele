@@ -1015,7 +1015,14 @@ async def _run_webattack_mode(update_or_query, context: ContextTypes.DEFAULT_TYP
     title, emoji, tools_list = WEB_ATTACK_MODES.get(mode, WEB_ATTACK_MODES["tech"])
 
     # Ambil original message untuk membalas dokumen
-    msg_obj = update_or_query.message if hasattr(update_or_query, "message") else update_or_query
+    msg_obj = None
+    if hasattr(update_or_query, 'message') and update_or_query.message:
+        msg_obj = update_or_query.message
+    elif hasattr(update_or_query, 'callback_query') and update_or_query.callback_query:
+        msg_obj = update_or_query.callback_query.message
+        
+    if not msg_obj:
+        return
 
     status_msg = await msg_obj.reply_text(
         f"<b>[ {emoji} INITIALIZING WEB ATTACK ]</b>\n"
