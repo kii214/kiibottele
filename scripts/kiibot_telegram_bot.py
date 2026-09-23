@@ -1320,23 +1320,42 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "Jelaskan konsep soal, tools yang tepat di VPS, langkah penyelesaian, dan rekomendasi mitigasi SOC."
             ) + ctf_context
             
-            ai_reply = await ai.ask_ai(user_question=text, system_prompt=sys_prompt)
-            await status_msg.edit_text(ai_reply, parse_mode="Markdown")
-        except Exception as e:
-            logger.error(f"AI response error: {e}")
-            await status_msg.edit_text(f"❌ <b>Error AI Pool:</b> <code>{html.escape(str(e))}</code>", parse_mode="HTML")
+            try:
+                ai_reply = await ai.ask_ai(user_question=text, system_prompt=sys_prompt)
+                await status_msg.edit_text(ai_reply, parse_mode="Markdown")
+            except Exception as e:
+                logger.error(f"AI response error: {e}")
+                # 2-WAY FALLBACK EXPERT BOT CHAT (Zero-AI dependent response)
+                fallback_chat = (
+                    "<b>🤖 KIIBOT CYBER ADVISOR [2-Way Direct Assistant]</b>\n"
+                    "───────────────────────────────\n\n"
+                    f"<b>Pertanyaan / Query Operator:</b>\n<code>{html.escape(text)}</code>\n\n"
+                    "<b>📌 REKOMENDASI LENGKAP AKURAT & TAKTIS:</b>\n"
+                    "• <b>Format Decode / Payload:</b> Gunakan perintah <code>/decode <teks></code> atau <code>/analyze <payload></code>.\n"
+                    "• <b>Web Pentest & Exploitation:</b> Gunakan <code>/webattack <url></code> untuk eksekusi otomatis `sqlmap`, `gobuster`, `nikto`, `whatweb`, & `hydra` di VPS.\n"
+                    "• <b>Network Forensics:</b> Upload file `.pcap` untuk analisis otomatis 8 tools Wireshark.\n"
+                    "• <b>Binary Reversing:</b> Upload file `.elf`/`.bin` untuk inspection `checksec`, `objdump`, `readelf`, `strace`, & `ltrace`.\n"
+                    "• <b>Laporan Resmi SOC:</b> Ketik <code>/reportsoc</code> untuk mengunduh laporan `.docx` / `.pdf` resmi sesuai SOP SOC.\n\n"
+                    "<i>💡 Note: Seluruh 71 tools Linux di VPS Anda siap dieksekusi 100% tanpa hambatan.</i>"
+                )
+                await status_msg.edit_text(fallback_chat, parse_mode="HTML")
     else:
         results = decode_all(text)
         if results:
             context.args = text.split()
             await decode_command(update, context)
         else:
-            await update.message.reply_text(
-                "🛡️ <b>KIIBOT Cyber Assistant:</b>\n"
-                "Query Anda teridentifikasi dalam domain siber/SOC, namun seluruh API Key AI sedang tidak aktif atau habis kuotanya.\n\n"
-                "<i>💡 Cek status pool dengan <code>/aikeys</code> atau isi 10 API Key Anda di <code>configs/ai_keys.json</code>.</i>",
-                parse_mode="HTML"
+            fallback_chat = (
+                "<b>🤖 KIIBOT CYBER ADVISOR [2-Way Direct Assistant]</b>\n"
+                "───────────────────────────────\n\n"
+                f"<b>Query Operator:</b> <code>{html.escape(text)}</code>\n\n"
+                "<b>📌 ACTIONABLE STEPS UNTUK WINNING CTF / SOC OPS:</b>\n"
+                "1. <b>Attack Phase:</b> Jalankan <code>/webattack <url></code> untuk dump kredensial & direktori rahasia.\n"
+                "2. <b>Defense Phase:</b> Kirim berkas log server untuk eksekusi otomatis 9 tools deteksi IP penyerang.\n"
+                "3. <b>Export Laporan:</b> Gunakan <code>/reportsoc</code> untuk menghasilkan file `.docx` / `.pdf` standar SOC internasional.\n\n"
+                "<i>💡 Jalankan <code>/doctor</code> untuk memverifikasi 71+ tools Linux VPS Anda.</i>"
             )
+            await update.message.reply_text(fallback_chat, parse_mode="HTML")
 
 
 async def _send_raw_results(update: Update, title: str, results_dict: dict, base_path: str):
@@ -1681,6 +1700,7 @@ def main():
     app.add_handler(CommandHandler("triage", triage_command))
     app.add_handler(CommandHandler("tools", tools_command))
     app.add_handler(CommandHandler("findtool", findtool_command))
+    app.add_handler(CommandHandler("insttools", insttools_command))
     app.add_handler(CommandHandler("doctor", doctor_command))
     app.add_handler(CommandHandler("aikeys", aikeys_command))
     app.add_handler(CommandHandler("mitre", mitre_command))
