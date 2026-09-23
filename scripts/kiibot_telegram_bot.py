@@ -776,10 +776,14 @@ async def webattack_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(usage_text, parse_mode="HTML")
         return
 
-    # Ambil URL, tambahkan scheme jika tidak ada
-    target_url = context.args[0]
-    if not target_url.startswith(("http://", "https://")):
-        target_url = "http://" + target_url
+    # Ambil URL, bersihkan jika ada duplikasi scheme (misal: http://target.ctf.comhttps://...)
+    raw_arg = context.args[0].strip()
+    # Jika ada multiple http(s):// di dalam string, ambil yang terakhir
+    urls = re.findall(r"https?://[^\s]+", raw_arg)
+    if urls:
+        target_url = urls[-1]
+    else:
+        target_url = "http://" + raw_arg if not raw_arg.startswith(("http://", "https://")) else raw_arg
 
     # Simpan target untuk callback buttons
     user_id = update.effective_user.id
@@ -926,17 +930,23 @@ async def _run_webattack_mode(update_or_query, context: ContextTypes.DEFAULT_TYP
         )
 
         if ai.is_available():
-            ai_report = await ai.analyze_results(
-                tool_results,
-                previous_context=f"Web Attack {title} pada {target_url}"
-            )
+            try:
+                ai_report = await ai.analyze_results(
+                    tool_results,
+                    previous_context=f"Web Attack {title} pada {target_url}"
+                )
+            except Exception as e_ai:
+                ai_report = f"⚠️ <i>AI Analysis Error ({e_ai}). Menampilkan hasil eksekusi tools mentah:</i>\n\n"
+                for tool_name, tool_out in tool_results.items():
+                    if tool_out:
+                        ai_report += f"<b>[ 🛠️ TOOL: {tool_name.upper()} ]</b>\n<code>{html.escape(str(tool_out)[:500])}</code>\n\n"
         else:
-            # Fallback tanpa AI: format output tool langsung
-            ai_report = f"<b>[ Hasil Tools Raw Output ]</b>\n\n"
+            # Full Fallback tanpa AI: Tampilkan hasil eksekusi tools Linux mentah secara lengkap
+            ai_report = "<b>[ 🛠️ HASIL EKSEKUSI TOOLS LINUX REAL-TIME ]</b>\n\n"
             for tool_name, tool_out in tool_results.items():
-                if tool_out and len(str(tool_out)) > 10:
-                    ai_report += f"<b>— {tool_name} —</b>\n<code>{html.escape(str(tool_out)[:400])}</code>\n\n"
-            ai_report += "\n<i>Note: AI tidak aktif. Isi configs/ai_keys.json untuk laporan analisis mendalam.</i>"
+                if tool_out and len(str(tool_out)) > 5:
+                    ai_report += f"<b>🔹 Tool {tool_name.upper()}:</b>\n<code>{html.escape(str(tool_out)[:600])}</code>\n\n"
+            ai_report += "<i>💡 Catatan: Hasil di atas adalah output eksekusi langsung dari binary tools Linux yang terpasang di VPS Anda.</i>"
 
         # Format final report
         full_reply = (
