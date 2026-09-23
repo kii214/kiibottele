@@ -996,6 +996,16 @@ def _generate_pdf_from_md(md_text: str, pdf_path: str) -> bool:
         logger.error(f"Gagal membuat PDF (mungkin wkhtmltopdf tidak terinstall): {e}")
         return False
 
+WEB_ATTACK_MODES = {
+    "fingerprint": ("TECH FINGERPRINT", "🔍", ["curl", "whatweb", "wafw00f", "nmap_web"]),
+    "sqli": ("SQL INJECTION ATTACK", "💉", ["whatweb", "sqlmap", "sqlmap_full"]),
+    "dir": ("DIRECTORY ENUMERATION", "📂", ["gobuster", "ffuf", "dirb", "nikto"]),
+    "bruteforce": ("LOGIN BRUTE-FORCE", "🔐", ["hydra_http_get", "curl", "whatweb"]),
+    "vulnscan": ("VULNERABILITY SCANNER", "🛡️", ["nikto", "nmap_web", "whatweb", "curl"]),
+    "osint": ("OSINT DOMAIN RECON", "🌐", ["whois", "dig", "nslookup"]),
+    "all": ("ALL-IN-ONE BATTERY", "🔥", ["curl", "whatweb", "wafw00f", "nmap_web", "gobuster", "ffuf", "nikto", "sqlmap"]),
+    "tech": ("TECH FINGERPRINT", "🔍", ["curl", "whatweb", "wafw00f", "nmap_web"])
+}
 
 async def _run_webattack_mode(update_or_query, context: ContextTypes.DEFAULT_TYPE,
                                target_url: str, mode: str):
