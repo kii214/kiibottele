@@ -319,33 +319,56 @@ Berikan HANYA JSON valid:
         outputs_str = json.dumps(formatted_outputs, indent=2, ensure_ascii=False)[:7000]
 
         system_prompt = (
-            "Anda adalah Senior SOC L3 Incident Responder dan Master CTF Solver (Blue Team & DFIR Expert).\n"
-            "Tugas Anda adalah menganalisis hasil eksekusi baterai tools cyber secara bersamaan.\n"
-            "ATURAN ANTI-HALUSINASI SANGAT KETAT:\n"
-            "1. HANYA laporkan flag atau kredensial jika BENAR-BENAR ada di dalam output tools di bawah.\n"
-            "2. JANGAN PERNAH mengarang atau menebak isi flag!\n"
-            "3. Jika flag belum ditemukan, berikan rekomendasi teknis lanjutan dan perintah Linux yang presisi.\n"
-            "4. Berikan analisis yang SANGAT MENDETAIL, logis, dan profesional. HINDARI SEMUA BENTUK EMOJI."
+            "Anda adalah Lead SOC L3 Incident Responder, Threat Hunter, dan Master CTF Solver.\n"
+            "Tugas Anda: Menganalisis hasil eksekusi baterai tools cybersecurity secara komprehensif dan mendalam.\n\n"
+            "ATURAN INTEGRITAS TEKNIS KETAT:\n"
+            "1. HANYA laporkan data/temuan/flag/kredensial yang BENAR-BENAR ada di dalam output tools.\n"
+            "2. JANGAN PERNAH berhalusinasi atau mengarang isi flag / kredensial.\n"
+            "3. Sajikan laporan dengan struktur SOC Incident & Threat Analysis yang SANGAT DETAIL dan profesional.\n"
+            "4. Gunakan Bahasa Indonesia yang baku dan taktis."
         )
 
-        user_prompt = f"""Konteks Kasus / Soal:
+        user_prompt = f"""Konteks Kasus / Target / Berkas:
 {previous_context}
 
-Hasil Eksekusi Tools (Simultaneous Execution):
+Hasil Eksekusi Tools (Simultaneous Execution Output):
 {outputs_str}
 
-Instruksi Analisis:
-1. Temuan Kritis & Validasi Flag:
-   - Jika ditemukan format flag (KIIBOT{{...}}, CTF{{...}}, flag{{...}}, picoCTF{{...}}, HTB{{...}}), ekstrak dan tampilkan dengan jelas.
-   - Jika tidak ada, sebutkan indikasi awal / anomali yang ditemukan secara detail.
-2. Korelasi Data Antar-Tools:
-   - Hubungkan temuan dari beberapa tools (contoh: log SQLi berkorelasi dengan IP scanner, atau tshark DNS payload berkorelasi dengan base64 decode).
-3. Translasi SOC & Incident Response:
-   - Apa arti temuan ini bagi tim SOC? (Contoh: Rule WAF / Suricata yang perlu dibuat, IoC IP/Hash, eskalasi L2/L3).
-4. Langkah Lanjutan (Jika Belum Selesai):
-   - Berikan baris perintah (command line) spesifik untuk VPS jika diperlukan investigasi lebih dalam.
+Instruksi Penyusunan Laporan Investigasi SOC & CTF:
+Susun laporan dengan format Markdown lengkap berikut:
 
-Sajikan dalam format Laporan Analisis Markdown yang rapi, sangat mendetail, profesional, tanpa emoji."""
+### 1. 🛡️ EXECUTIVE SUMMARY & SEVERITY TRIAGE
+- **Severity Level:** [CRITICAL / HIGH / MEDIUM / LOW / INFORMATIONAL]
+- **Kategori Ancaman:** [Web Exploitation / Network Forensics / Malware / Stego / Recon]
+- **Ringkasan Kasus:** [Deskripsi singkat 2-3 kalimat mengenai apa yang terjadi dan tingkat keparahan temuan]
+
+### 2. 🔍 TEMUAN DETAIL PER-TOOL (DETAILED FINDINGS)
+- Uraikan temuan dari masing-masing tool secara terperinci:
+  - Port terbuka, service, banner, teknologi web (dari nmap/whatweb/wafw00f)
+  - Endpoint/direktori tersembunyi yang ditemukan (dari gobuster/ffuf/dirb)
+  - Kerentanan & potensi injeksi (dari sqlmap/nikto)
+  - Parameter URL, payload, kredensial yang bocor (jika ada)
+  - Anomali paket, DNS queries, HTTP streams, atau string penting (dari tshark/strings/binwalk)
+
+### 3. 🎯 PEMETAAN MITRE ATT&CK MATRIX
+- **Tactic:** [Contoh: Initial Access / Reconnaissance / Discovery / Exfiltration]
+- **Technique ID & Name:** [Contoh: T1190 - Exploit Public-Facing Application, T1595 - Active Scanning]
+- **Deskripsi Aktivitas Terdeteksi:** [Korelasi temuan dengan teknik penyerang]
+
+### 4. 🚩 INDICATORS OF COMPROMISE (IOCs) & ARTIFAK
+- **IP / Domain Terlibat:** [Daftar IP / Hostname]
+- **Flag CTF / Token / Kredensial:** [Ekstrak flag jika ada: KIIBOT{{...}}, flag{{...}}, dsb.]
+- **Endpoint Berbahaya / Hash:** [URL rentan atau file hash]
+
+### 5. 🛠️ SOC CONTAINMENT & MITIGATION PLAYBOOK
+- **Tindakan Penanganan Cepat (Containment):** [Contoh: Rule iptables / Firewall block, WAF rule ModSecurity]
+- **Deteksi SIEM / IDS (Suricata/Snort):** [Contoh signature atau query hunting]
+- **Langkah Remediasi Sistem:** [Patching, config hardening]
+
+### 6. ⚡ REKOMENDASI COMMAND LANJUTAN (LINUX CLI)
+- Berikan baris perintah nyata yang presisi untuk dijalankan di VPS jika investigasi perlu diperdalam.
+
+Sajikan laporan secara menyeluruh, tajam, dan sangat mendetail."""
 
         messages = [
             {"role": "system", "content": system_prompt},

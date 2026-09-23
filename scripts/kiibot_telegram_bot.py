@@ -1001,7 +1001,6 @@ async def _run_webattack_mode(update_or_query, context: ContextTypes.DEFAULT_TYP
                     if tool_out:
                         ai_report += f"<b>[ 🛠️ TOOL: {tool_name.upper()} ]</b>\n<code>{html.escape(str(tool_out)[:500])}</code>\n\n"
         else:
-            # Full Fallback tanpa AI: Tampilkan hasil eksekusi tools Linux mentah secara lengkap
             ai_report = "<b>[ 🛠️ HASIL EKSEKUSI TOOLS LINUX REAL-TIME ]</b>\n\n"
             for tool_name, tool_out in tool_results.items():
                 if tool_out and len(str(tool_out)) > 5:
@@ -1010,7 +1009,7 @@ async def _run_webattack_mode(update_or_query, context: ContextTypes.DEFAULT_TYP
 
         # Format final report
         full_reply = (
-            f"<b>[ {emoji} WEB ATTACK REPORT: {title} ]</b>\n"
+            f"<b>[ {emoji} WEB ATTACK & SOC INCIDENT REPORT: {title} ]</b>\n"
             f"<code>TARGET: {html.escape(target_url)}</code>\n\n"
         )
 
@@ -1033,12 +1032,62 @@ async def _run_webattack_mode(update_or_query, context: ContextTypes.DEFAULT_TYP
 
         full_reply += f"\n{ai_report}"
 
+        # Selalu simpan dan kirimkan file laporan resmi (.md)
+        os.makedirs("reports", exist_ok=True)
+        safe_target = re.sub(r"[^\w\-.]", "_", target_url)[:40]
+        report_file_path = os.path.join("reports", f"SOC_Report_{mode.upper()}_{safe_target}.md")
+        with open(report_file_path, "w", encoding="utf-8") as f:
+            f.write(f"# KIIBOT SOC & CTF INCIDENT REPORT: {title}\n")
+            f.write(f"Target: {target_url}\n")
+            f.write(f"Timestamp: {os.popen('date').read().strip()}\n\n")
+            f.write(ai_report)
+            f.write("\n\n---\n## RAW TOOLS OUTPUT DUMP\n\n")
+            for tname, tout in tool_results.items():
+                f.write(f"### TOOL: {tname.upper()}\n```\n{tout}\n```\n\n")
+
+        # Kirim ringkasan chat
         if len(full_reply) > 3800:
-            # Kirim sebagai file
-            import tempfile
-            with tempfile.NamedTemporaryFile(mode='w', suffix='_webattack.md',
-                                            delete=False, encoding='utf-8') as f:
-                f.write(full_reply)
+            summary_chat = (
+                f"<b>[ {emoji} WEB ATTACK & SOC REPORT: {title} ]</b>\n"
+                f"<code>TARGET: {html.escape(target_url)}</code>\n\n"
+                f"✅ <b>Analisis SOC Selesai:</b> {len(tools_list)} tools berhasil dieksekusi.\n"
+            )
+            if flag_patterns:
+                summary_chat += f"🚩 <b>FLAG DITEMUKAN:</b> <code>{html.escape(', '.join(set(flag_patterns)))}</code>\n"
+            if cred_patterns:
+                summary_chat += f"🔑 <b>Kredensial Ditemukan:</b> <code>{html.escape(', '.join(list(set(cred_patterns))[:5]))}</code>\n"
+            summary_chat += (
+                f"\n📄 <b>Laporan Lengkap Mendetail & Mitigasi SOC Terlampir di bawah (.md).</b>"
+            )
+            await status_msg.edit_text(summary_chat, parse_mode="HTML")
+        else:
+            await status_msg.edit_text(full_reply, parse_mode="HTML")
+
+        # Kirim dokumen laporan lengkap ke Telegram
+        with open(report_file_path, "rb") as doc:
+            await msg_obj.reply_document(
+                document=doc,
+                caption=f"📋 <b>Laporan Investigasi SOC & Hasil Scan ({html.escape(title)})</b>\nTarget: <code>{html.escape(target_url)}</code>",
+                parse_mode="HTML"
+            )
+
+        # Kirim juga file teks output mentah dari tools
+        await _send_raw_results(msg_obj, f"Raw WebAttack Output ({title})", tool_results, os.path.join("reports", f"raw_{safe_target}"))
+
+        # Tampilkan kembali sub-menu untuk serangan lanjutan
+        await msg_obj.reply_text(
+            f"✅ <b>{title} selesai.</b> Pilih mode lain untuk melanjutkan:\n"
+            f"<code>Target: {html.escape(target_url)}</code>",
+            parse_mode="HTML",
+            reply_markup=get_webattack_keyboard(target_url)
+        )
+
+    except Exception as e:
+        logger.error(f"Error _run_webattack_mode ({mode}): {e}")
+        await status_msg.edit_text(
+            f"❌ <b>Error saat menjalankan {title}:</b>\n<code>{html.escape(str(e))}</code>",
+            parse_mode="HTML"
+        )full_reply)
                 tmp_path = f.name
             with open(tmp_path, 'rb') as doc:
                 await msg_obj.reply_document(
@@ -1639,20 +1688,37 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
         tool_results = await execute_concurrent_tools(tools_to_run, file_path)
         final_report = await ai.analyze_results(tool_results, previous_context=f"Kategori: {category}")
 
+        # Selalu simpan file laporan resmi (.md)
+        report_path = f"{file_path}_SOC_Report.md"
+        with open(report_path, "w", encoding="utf-8") as f:
+            f.write(f"# KIIBOT SOC & CTF ANALYSIS REPORT: {file_name}\n")
+            f.write(f"Category: {category}\n\n")
+            f.write(final_report)
+            f.write("\n\n---\n## RAW TOOLS OUTPUT DUMP\n\n")
+            for tname, tout in tool_results.items():
+                f.write(f"### TOOL: {tname.upper()}\n```\n{tout}\n```\n\n")
+
         if len(final_report) > 3800:
-            report_path = f"{file_path}_report.md"
-            with open(report_path, "w", encoding="utf-8") as f:
-                f.write(final_report)
-            await update.message.reply_document(
-                document=open(report_path, "rb"),
-                caption=f"📋 <b>Laporan Analisis Taktis KIIBOT AI ({html.escape(file_name)})</b>",
+            await update.message.reply_text(
+                f"<b>[ KIIBOT SOC & CTF INCIDENT REPORT ]</b>\n"
+                f"» <b>File:</b> <code>{html.escape(file_name)}</code>\n"
+                f"» <b>Kategori:</b> <code>{html.escape(category)}</code>\n\n"
+                f"✅ <i>Analisis selesai. Laporan lengkap dan mitigasi SOC terlampir di bawah (.md).</i>",
                 parse_mode="HTML"
             )
         else:
             await update.message.reply_text(
-                f"<b>[ KIIBOT INCIDENT REPORT ]</b>\n\n"
+                f"<b>[ KIIBOT SOC & CTF INCIDENT REPORT ]</b>\n\n"
                 f"{final_report}",
                 parse_mode="Markdown"
+            )
+
+        # Kirim dokumen laporan resmi ke Telegram
+        with open(report_path, "rb") as doc:
+            await update.message.reply_document(
+                document=doc,
+                caption=f"📋 <b>Laporan Investigasi SOC ({html.escape(file_name)})</b>",
+                parse_mode="HTML"
             )
 
         await _send_raw_results(update, f"Tools Output ({category})", tool_results, file_path)
