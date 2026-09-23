@@ -1124,6 +1124,182 @@ async def _run_webattack_mode(update_or_query, context: ContextTypes.DEFAULT_TYP
                     f.write(f"### {tname.upper()}\n\n```\n{tout}\n```\n\n")
 
 
+def _generate_pdf_from_md(md_text: str, pdf_path: str) -> bool:
+    """Mengubah markdown menjadi PDF. Mengembalikan True jika berhasil."""
+    try:
+        import markdown
+        import pdfkit
+    except ImportError:
+        return False
+        
+    html_content = markdown.markdown(md_text, extensions=["tables", "fenced_code", "nl2br"])
+    
+    styled_html = f"""<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<style>
+  body {{ font-family: 'Arial', sans-serif; font-size: 10pt; line-height: 1.5; padding: 20px; color: #333; }}
+  h1 {{ color: #d90429; font-size: 18pt; border-bottom: 2px solid #d90429; padding-bottom: 5px; }}
+  h2 {{ color: #2b2d42; font-size: 14pt; margin-top: 20px; }}
+  h3 {{ color: #8d99ae; font-size: 12pt; }}
+  table {{ border-collapse: collapse; width: 100%; margin-bottom: 20px; font-size: 9pt; }}
+  th, td {{ border: 1px solid #edf2f4; padding: 8px; text-align: left; }}
+  th {{ background-color: #2b2d42; color: white; }}
+  tr:nth-child(even) {{ background-color: #f8f9fa; }}
+  pre {{ background: #2b2d42; color: #a8ff78; padding: 12px; border-radius: 5px; font-size: 8pt; white-space: pre-wrap; word-wrap: break-word; }}
+  code {{ font-family: 'Courier New', monospace; }}
+  blockquote {{ border-left: 4px solid #ef233c; padding-left: 10px; color: #666; font-style: italic; background: #fff5f5; margin: 10px 0; padding: 10px; }}
+</style>
+</head>
+<body>
+{html_content}
+</body>
+</html>"""
+
+    pdf_options = {
+        "quiet": "",
+        "page-size": "A4",
+        "margin-top": "15mm",
+        "margin-right": "15mm",
+        "margin-bottom": "15mm",
+        "margin-left": "15mm",
+        "encoding": "UTF-8"
+    }
+
+    try:
+        pdfkit.from_string(styled_html, pdf_path, options=pdf_options)
+        return True
+    except Exception as e:
+        logger.error(f"Gagal membuat PDF (mungkin wkhtmltopdf tidak terinstall): {e}")
+        return False
+
+
+async def _run_webattack_mode(update_or_query, context: ContextTypes.DEFAULT_TYPE,
+                               target_url: str, mode: str):
+    """
+    Eksekusi satu baterai serangan spesifik dan kirim report (Markdown atau PDF).
+    """
+    title, emoji, tools_list = WEB_ATTACK_MODES.get(mode, WEB_ATTACK_MODES["tech"])
+
+    # Ambil original message untuk membalas dokumen
+    msg_obj = update_or_query.message if hasattr(update_or_query, "message") else update_or_query
+
+    status_msg = await msg_obj.reply_text(
+        f"<b>[ {emoji} INITIALIZING WEB ATTACK ]</b>\n"
+        f"» <b>Target:</b> <code>{html.escape(target_url)}</code>\n"
+        f"» <b>Mode:</b> <code>{html.escape(title)}</code>\n"
+        f"» <b>Tools:</b> {', '.join(tools_list)}\n\n"
+        f"<i>⏳ Sedang memuat AI SOC Engine...</i>",
+        parse_mode="HTML"
+    )
+
+    try:
+        ai = AIOrchestrator()
+        
+        await status_msg.edit_text(
+            f"<b>[ {emoji} EXECUTING CONCURRENT TOOLS ]</b>\n"
+            f"» <b>Target:</b> <code>{html.escape(target_url)}</code>\n"
+            f"» <b>Mode:</b> <code>{html.escape(title)}</code>\n"
+            f"» <b>Tools:</b> {', '.join(tools_list)}\n\n"
+            f"<i>🔥 Menjalankan baterai serangan (bisa memakan waktu beberapa menit)...</i>",
+            parse_mode="HTML"
+        )
+
+        tool_results = await execute_concurrent_tools(tools_list, target_url)
+
+        await status_msg.edit_text(
+            f"<b>[ {emoji} ANALYZING RESULTS ]</b>\n"
+            f"» <b>Target:</b> <code>{html.escape(target_url)}</code>\n"
+            f"» <b>Mode:</b> <code>{html.escape(title)}</code>\n\n"
+            f"<i>🧠 KIIBOT AI sedang menganalisis kerentanan, merekonstruksi attack chain, dan menyusun SOC report...</i>",
+            parse_mode="HTML"
+        )
+
+        # Analisis Cerdas
+        previous_context = (
+            f"Target: {target_url}\n"
+            f"Mode Analisis: {title}\n"
+            "ATURAN: Berikan analisis faktual berdasarkan output tools. Jangan mengarang."
+        )
+
+        ai_mode_used = "AI-Assisted"
+        if ai.is_available():
+            try:
+                ai_report = await ai.analyze_results(
+                    tool_results,
+                    previous_context=f"Web Attack {title} pada {target_url}"
+                )
+            except Exception as e_ai:
+                logger.warning(f"AI gagal ({e_ai}), beralih ke structured fallback report")
+                ai_mode_used = "Structured Fallback (AI Unavailable)"
+                ai_report = _build_fallback_report(tool_results, target_url, title)
+        else:
+            ai_mode_used = "Structured Fallback (No API Key)"
+            ai_report = _build_fallback_report(tool_results, target_url, title)
+
+        # Format final report
+        full_reply = (
+            f"<b>[ {emoji} WEB ATTACK & SOC INCIDENT REPORT: {title} ]</b>\n"
+            f"<code>TARGET: {html.escape(target_url)}</code>\n\n"
+        )
+
+        # Cek apakah ada credential/flag yang ditemukan di output mentah
+        raw_output_str = str(tool_results)
+        cred_patterns = re.findall(
+            r"(?:password|passwd|pass|pwd|credential)[\s:=]+([\w@!#$%^&*()_+=-]{4,30})",
+            raw_output_str, re.IGNORECASE
+        )
+        flag_patterns = re.findall(
+            r"((?:CTF|FLAG|KIIBOT|picoCTF|HTB|THM)\{[^}]+\})",
+            raw_output_str, re.IGNORECASE
+        )
+
+        if flag_patterns:
+            full_reply += f"🚩 <b>FLAG DITEMUKAN: {html.escape(', '.join(set(flag_patterns)))}</b>\n\n"
+        if cred_patterns:
+            unique_creds = list(set(cred_patterns))[:5]
+            full_reply += f"🔑 <b>POTENTIAL CREDS: {html.escape(', '.join(unique_creds))}</b>\n\n"
+
+        full_reply += f"\n{ai_report}"
+
+        # Selalu simpan dan kirimkan file laporan resmi (.md)
+        os.makedirs("reports", exist_ok=True)
+        safe_target = re.sub(r"[^\w\-.]", "_", target_url)[:40]
+        report_file_path = os.path.join("reports", f"SOC_Report_{mode.upper()}_{safe_target}.md")
+        from datetime import datetime
+        ts_now = datetime.now().strftime("%d %B %Y — %H:%M:%S WIB")
+        with open(report_file_path, "w", encoding="utf-8") as f:
+            f.write("---\n")
+            f.write(f"# SECURITY INCIDENT & THREAT ANALYSIS REPORT\n\n")
+            f.write(f"**Engine:** KIIBOT SOC Automation Engine  \n")
+            f.write(f"**Tanggal Analisis:** {ts_now}  \n")
+            f.write(f"**Target:** {target_url}  \n")
+            f.write(f"**Mode Scan:** {title}  \n")
+            f.write(f"**Klasifikasi:** CONFIDENTIAL — Internal Use Only  \n\n")
+            f.write("---\n\n")
+            f.write(ai_report)
+            f.write("\n\n---\n\n")
+            f.write("## Appendix — Raw Tool Output (Evidence Capture)\n\n")
+            f.write("> Bagian ini berisi output mentah lengkap dari setiap tool yang dieksekusi.\n\n")
+            for tname, tout in tool_results.items():
+                if tout and str(tout).strip():
+                    f.write(f"### {tname.upper()}\n\n```\n{tout}\n```\n\n")
+
+        # Coba generate PDF dari file MD
+        pdf_file_path = report_file_path.replace(".md", ".pdf")
+        with open(report_file_path, "r", encoding="utf-8") as f:
+            md_content = f.read()
+            
+        pdf_success = _generate_pdf_from_md(md_content, pdf_file_path)
+        
+        if pdf_success:
+            file_to_send = pdf_file_path
+            caption_ext = "(.pdf)"
+        else:
+            file_to_send = report_file_path
+            caption_ext = "(.md)"
+            
         # Kirim ringkasan chat
         if len(full_reply) > 3800:
             summary_chat = (
@@ -1136,14 +1312,14 @@ async def _run_webattack_mode(update_or_query, context: ContextTypes.DEFAULT_TYP
             if cred_patterns:
                 summary_chat += f"🔑 <b>Kredensial Ditemukan:</b> <code>{html.escape(', '.join(list(set(cred_patterns))[:5]))}</code>\n"
             summary_chat += (
-                f"\n📄 <b>Laporan Lengkap Mendetail & Mitigasi SOC Terlampir di bawah (.md).</b>"
+                f"\n📄 <b>Laporan Lengkap Mendetail & Mitigasi SOC Terlampir di bawah {caption_ext}.</b>"
             )
             await status_msg.edit_text(summary_chat, parse_mode="HTML")
         else:
             await status_msg.edit_text(full_reply, parse_mode="HTML")
 
         # Kirim dokumen laporan lengkap ke Telegram
-        with open(report_file_path, "rb") as doc:
+        with open(file_to_send, "rb") as doc:
             await msg_obj.reply_document(
                 document=doc,
                 caption=f"📋 <b>Laporan Investigasi SOC & Hasil Scan ({html.escape(title)})</b>\nTarget: <code>{html.escape(target_url)}</code>",
