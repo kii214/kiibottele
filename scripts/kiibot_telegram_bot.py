@@ -155,23 +155,27 @@ def get_main_keyboard() -> InlineKeyboardMarkup:
     """Membuat menu utama interaktif bernomor untuk mode operasi KIIBOT."""
     keyboard = [
         [
-            InlineKeyboardButton("1️⃣  Analisis File CTF", callback_data="menu_file"),
-            InlineKeyboardButton("2️⃣  Web Attack CTF", callback_data="menu_webattack"),
+            InlineKeyboardButton("📂 1. Analisis File CTF", callback_data="menu_file"),
+            InlineKeyboardButton("⚔️ 2. Web Attack CTF", callback_data="menu_webattack"),
         ],
         [
-            InlineKeyboardButton("3️⃣  Decode & Crypto", callback_data="menu_decode"),
-            InlineKeyboardButton("4️⃣  SOC Triage", callback_data="menu_soc"),
+            InlineKeyboardButton("🔓 3. Decode & Crypto", callback_data="menu_decode"),
+            InlineKeyboardButton("🛡️ 4. SOC Triage & Alert", callback_data="menu_soc"),
         ],
         [
-            InlineKeyboardButton("5️⃣  VPS Doctor", callback_data="btn_doctor"),
-            InlineKeyboardButton("6️⃣  AI Keys Status", callback_data="btn_aikeys"),
+            InlineKeyboardButton("📝 5. Laporan Word (.docx)", callback_data="gen_report_docx_1"),
+            InlineKeyboardButton("📄 6. Laporan PDF", callback_data="gen_report_pdf_1"),
         ],
         [
-            InlineKeyboardButton("📚  MITRE ATT&CK", callback_data="btn_mitre_list"),
-            InlineKeyboardButton("🛠️  Tools Registry", callback_data="btn_tools"),
+            InlineKeyboardButton("🩺 7. VPS Doctor", callback_data="btn_doctor"),
+            InlineKeyboardButton("🔑 8. Status AI Keys", callback_data="btn_aikeys"),
         ],
         [
-            InlineKeyboardButton("❓  Bantuan & Command", callback_data="btn_help"),
+            InlineKeyboardButton("📚 MITRE ATT&CK", callback_data="btn_mitre_list"),
+            InlineKeyboardButton("🛠️ Tools Registry", callback_data="btn_tools"),
+        ],
+        [
+            InlineKeyboardButton("💡 Panduan & Command", callback_data="btn_help"),
         ]
     ]
     return InlineKeyboardMarkup(keyboard)
@@ -179,26 +183,24 @@ def get_main_keyboard() -> InlineKeyboardMarkup:
 
 def get_webattack_keyboard(target_url: str) -> InlineKeyboardMarkup:
     """Sub-menu pilihan mode Web Attack CTF."""
-    # Encode URL ke callback data (maks 64 char)
-    url_short = target_url[:30] if len(target_url) > 30 else target_url
     keyboard = [
         [
-            InlineKeyboardButton("1️⃣  Tech Fingerprint", callback_data=f"wa_fingerprint"),
-            InlineKeyboardButton("2️⃣  SQL Injection", callback_data=f"wa_sqli"),
+            InlineKeyboardButton("🎯 1. Tech Fingerprint", callback_data="wa_fingerprint"),
+            InlineKeyboardButton("💉 2. SQL Injection", callback_data="wa_sqli"),
         ],
         [
-            InlineKeyboardButton("3️⃣  Dir Enumeration", callback_data=f"wa_dir"),
-            InlineKeyboardButton("4️⃣  Login Brute-force", callback_data=f"wa_bruteforce"),
+            InlineKeyboardButton("📂 3. Dir Enumeration", callback_data="wa_dir"),
+            InlineKeyboardButton("🔐 4. Login Brute-force", callback_data="wa_bruteforce"),
         ],
         [
-            InlineKeyboardButton("5️⃣  Vuln Scanner", callback_data=f"wa_vulnscan"),
-            InlineKeyboardButton("6️⃣  OSINT Domain", callback_data=f"wa_osint"),
+            InlineKeyboardButton("🛡️ 5. Vuln Scanner", callback_data="wa_vulnscan"),
+            InlineKeyboardButton("🌐 6. OSINT Domain", callback_data="wa_osint"),
         ],
         [
-            InlineKeyboardButton("🔥  ALL-IN-ONE BATTERY", callback_data=f"wa_all"),
+            InlineKeyboardButton("🔥 ALL-IN-ONE ATTACK BATTERY", callback_data="wa_all"),
         ],
         [
-            InlineKeyboardButton("🔙  Menu Utama", callback_data="menu_main"),
+            InlineKeyboardButton("🔙 Kembali ke Menu Utama", callback_data="menu_main"),
         ]
     ]
     return InlineKeyboardMarkup(keyboard)
@@ -209,32 +211,25 @@ def get_webattack_keyboard(target_url: str) -> InlineKeyboardMarkup:
 # =====================================================================
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Menampilkan sambutan eksklusif bergaya SOC Cyber Command Center dengan menu bernomor."""
+    """Menampilkan sambutan eksklusif bergaya SOC Cyber Command Center."""
     if not check_auth(update) or not update.message:
         return
 
     welcome_text = (
-        "<b>[ KIIBOT SOC &amp; CTF ENGINE ]</b>\n"
-        "<code>STATUS: ONLINE | ENGINE: READY</code>\n\n"
-        "Halo, Operator. Saya adalah asisten analitik siber untuk memecahkan "
-        "tantangan CTF dan menganalisis insiden SOC Blue Team.\n\n"
-        "<b>[ PILIH MODE OPERASI ]</b>\n"
-        "┌─────────────────────────────────────┐\n"
-        "│ 1️⃣  <b>Analisis File CTF</b>                  │\n"
-        "│    Kirim: PCAP, ELF, PNG, ZIP, LOG  │\n"
-        "│ 2️⃣  <b>Web Attack CTF</b>                    │\n"
-        "│    Ketik: /webattack &lt;url/domain&gt;    │\n"
-        "│ 3️⃣  <b>Decode &amp; Crypto</b>                  │\n"
-        "│    Ketik: /decode &lt;hash/cipher&gt;      │\n"
-        "│ 4️⃣  <b>SOC Triage</b>                        │\n"
-        "│    Ketik: /soc atau /triage          │\n"
-        "│ 5️⃣  <b>VPS Doctor</b>                        │\n"
-        "│    Ketik: /doctor                    │\n"
-        "│ 6️⃣  <b>AI Keys Status</b>                    │\n"
-        "│    Ketik: /aikeys                    │\n"
-        "└─────────────────────────────────────┘\n\n"
-        "<i>💡 Tips: Langsung kirim file (PCAP/ELF/PNG/LOG) untuk analisis otomatis,\n"
-        "atau kirim /webattack &lt;url&gt; untuk CTF web exploitation.</i>"
+        "<b>⚡ KIIBOT CYBER COMMAND CENTER</b>\n"
+        "<code>ENGINE: ACTIVE | SYSTEM: OPTIMAL | VPS: ONLINE</code>\n"
+        "───────────────────────────────\n\n"
+        "Selamat datang, Operator. KIIBOT adalah asisten intelijen cyber ops "
+        "yang dilengkapi <b>40+ Tools Otomatis</b>, <b>AI Vision Inspection</b>, "
+        "serta <b>Engine Laporan SOC Professional</b>.\n\n"
+        "<b>📌 PILIH FITUR OPERASIONAL:</b>\n"
+        "• <b>1. Analisis File CTF</b> — Kirim berkas `.pcap`, `.elf`, `.log`, `.png`, `.zip`\n"
+        "• <b>2. Web Attack CTF</b> — <code>/webattack &lt;url&gt;</code> (SQLi, Dir Enum, Brute, Scan)\n"
+        "• <b>3. Decode & Crypto</b> — <code>/decode &lt;text&gt;</code> (Multi-stage auto-decode)\n"
+        "• <b>4. SOC Triage</b> — <code>/triage</code> (Simulator prioritas alert insiden)\n"
+        "• <b>5. Laporan Word SOC</b> — <code>/reportsoc</code> (Export `.docx` & `.pdf` resmi)\n"
+        "• <b>6. VPS Doctor</b> — <code>/doctor</code> (Diagnosa kelengkapan tools di VPS)\n\n"
+        "<i>💡 Petunjuk: Langsung upload berkas ke chat untuk analisis otomatis!</i>"
     )
     await update.message.reply_text(
         welcome_text,
@@ -344,20 +339,30 @@ async def doctor_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"<code>SYSTEM HEALTH: {installed_count}/{total} TOOLS ({installed_pct}% READY)</code>\n\n"
         )
 
+        # Visual progress bar
+        filled_blocks = int(installed_pct / 10)
+        progress_bar = "█" * filled_blocks + "░" * (10 - filled_blocks)
+
+        reply = (
+            "<b>🩺 KIIBOT VPS DIAGNOSTICS</b>\n"
+            f"<code>HEALTH: [{progress_bar}] {installed_pct}% ({installed_count}/{total} Tools)</code>\n"
+            "───────────────────────────────\n\n"
+        )
+
         # Kelompokkan berdasarkan kategori
         for cat, cat_data in report["categories"].items():
             cat_installed = cat_data["installed"]
             cat_missing = cat_data["missing"]
-            icon = "+" if not cat_missing else ("~" if cat_installed else "-")
-            reply += f"<b>[ CATEGORY: {cat.upper()} ]</b>\n"
+            cat_icon = "🟢" if not cat_missing else ("🟡" if cat_installed else "🔴")
+            reply += f"<b>{cat_icon} KATEGORI: {cat.upper()}</b>\n"
             if cat_installed:
-                reply += f"+ Installed : {', '.join(cat_installed[:6])}\n"
+                reply += f"  ✓ <b>Installed:</b> <code>{', '.join(cat_installed[:8])}</code>\n"
             if cat_missing:
-                reply += f"- Missing   : {', '.join(cat_missing[:4])}\n"
+                reply += f"  ✗ <b>Missing:</b> <i>{', '.join(cat_missing[:6])}</i>\n"
             reply += "\n"
 
         if missing_count > 0:
-            reply += "<i>Untuk menginstall tools yang hilang, jalankan: <code>bash scripts/install_all_tools.sh</code> di VPS.</i>"
+            reply += "<i>💡 Untuk menginstall tools yang belum ada: <code>sudo bash scripts/install_all_tools.sh</code></i>"
 
         await status_msg.edit_text(reply, parse_mode="HTML")
 
