@@ -1167,19 +1167,6 @@ async def _run_webattack_mode(update_or_query, context: ContextTypes.DEFAULT_TYP
             f"❌ <b>Error saat menjalankan {title}:</b>\n<code>{html.escape(str(e))}</code>",
             parse_mode="HTML"
         )
-        await msg_obj.reply_text(
-            f"✅ <b>{title} selesai.</b> Pilih mode lain untuk melanjutkan:\n"
-            f"<code>Target: {html.escape(target_url)}</code>",
-            parse_mode="HTML",
-            reply_markup=get_webattack_keyboard(target_url)
-        )
-
-    except Exception as e:
-        logger.error(f"Error _run_webattack_mode ({mode}): {e}")
-        await status_msg.edit_text(
-            f"❌ <b>Error saat menjalankan {title}:</b>\n<code>{html.escape(str(e))}</code>",
-            parse_mode="HTML"
-        )
 
 
 async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
