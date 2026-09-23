@@ -30,6 +30,9 @@ class AIOrchestrator:
         self.base_url = os.getenv("AI_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai/")
         self.model = os.getenv("AI_MODEL", "gemini-2.0-flash")
         self.api_keys: list[str] = self._load_api_keys()
+        # Reset state agar key yang sebelumnya gagal karena bug auth dicoba ulang
+        AIOrchestrator._active_key_index = 0
+        AIOrchestrator._exhausted_keys.clear()
 
     def _load_api_keys(self) -> list[str]:
         """
@@ -141,10 +144,32 @@ class AIOrchestrator:
         """Inisialisasi AsyncOpenAI client untuk key tertentu."""
         if not HAS_OPENAI or not AsyncOpenAI:
             return None
-        headers = {}
-        if "generativelanguage.googleapis.com" in self.base_url:
-            headers["x-goog-api-key"] = api_key
-        return AsyncOpenAI(api_key=api_key, base_url=self.base_url, default_headers=headers if headers else None)
+
+        is_gemini = "generativelanguage.googleapis.com" in self.base_url
+
+        if is_gemini:
+            # Key format AQ.Ab8... (GCP Service Account bound key) membutuhkan
+            # x-goog-api-key header TANPA Authorization Bearer agar tidak konflik.
+            # Key format AIzaSy... (standard API key) bisa pakai keduanya.
+            is_new_format = api_key.startswith("AQ.")
+            headers = {"x-goog-api-key": api_key}
+
+            if is_new_format:
+                # Gunakan dummy api_key agar SDK tidak kirim "Authorization: Bearer AQ..."
+                # yang akan ditolak Google sebagai ACCESS_TOKEN_TYPE_UNSUPPORTED
+                return AsyncOpenAI(
+                    api_key="GEMINI",
+                    base_url=self.base_url,
+                    default_headers=headers
+                )
+            else:
+                return AsyncOpenAI(
+                    api_key=api_key,
+                    base_url=self.base_url,
+                    default_headers=headers
+                )
+
+        return AsyncOpenAI(api_key=api_key, base_url=self.base_url)
 
     def _is_quota_or_auth_error(self, error: Exception) -> bool:
         """Mendeteksi apakah error disebabkan oleh kuota habis, rate limit, atau token invalid."""
