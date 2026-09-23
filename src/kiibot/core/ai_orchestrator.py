@@ -299,76 +299,147 @@ Berikan HANYA JSON valid:
         if not self.is_available():
             return "AI tidak aktif atau kuota semua key telah habis. Periksa log output tools secara manual."
 
-        # Cerdas membatasi panjang output tiap tool (max 1500 chars per tool, total budget ~6500 chars)
+        # Budget karakter per tool ditingkatkan agar capture output lengkap di laporan
+        CHARS_PER_TOOL = 3000
+        TOTAL_BUDGET = 14000
         formatted_outputs = {}
         for tool_name, output in tool_outputs.items():
             if isinstance(output, str):
-                if len(output) > 1500:
-                    formatted_outputs[tool_name] = output[:1500] + f"\n... [TRUNCATED - Total {len(output)} chars]"
+                if len(output) > CHARS_PER_TOOL:
+                    formatted_outputs[tool_name] = output[:CHARS_PER_TOOL] + f"\n... [TRUNCATED — {len(output)} chars total]"
                 else:
                     formatted_outputs[tool_name] = output
             elif isinstance(output, (dict, list)):
                 dumped = json.dumps(output, indent=2, ensure_ascii=False)
-                if len(dumped) > 1500:
-                    formatted_outputs[tool_name] = dumped[:1500] + "\n... [TRUNCATED]"
+                if len(dumped) > CHARS_PER_TOOL:
+                    formatted_outputs[tool_name] = dumped[:CHARS_PER_TOOL] + "\n... [TRUNCATED]"
                 else:
                     formatted_outputs[tool_name] = output
             else:
                 formatted_outputs[tool_name] = str(output)
 
-        outputs_str = json.dumps(formatted_outputs, indent=2, ensure_ascii=False)[:7000]
+        outputs_str = json.dumps(formatted_outputs, indent=2, ensure_ascii=False)[:TOTAL_BUDGET]
 
         system_prompt = (
-            "Anda adalah Lead SOC L3 Incident Responder, Threat Hunter, dan Master CTF Solver.\n"
-            "Tugas Anda: Menganalisis hasil eksekusi baterai tools cybersecurity secara komprehensif dan mendalam.\n\n"
-            "ATURAN INTEGRITAS TEKNIS KETAT:\n"
-            "1. HANYA laporkan data/temuan/flag/kredensial yang BENAR-BENAR ada di dalam output tools.\n"
-            "2. JANGAN PERNAH berhalusinasi atau mengarang isi flag / kredensial.\n"
-            "3. Sajikan laporan dengan struktur SOC Incident & Threat Analysis yang SANGAT DETAIL dan profesional.\n"
-            "4. Gunakan Bahasa Indonesia yang baku dan taktis."
+            "You are a Tier-3 SOC Incident Responder, Threat Hunter, and DFIR Specialist with expertise in CTF challenges.\n"
+            "Your role is to produce a professional, executive-grade Security Incident Analysis Report.\n\n"
+            "STRICT INTEGRITY RULES:\n"
+            "1. Report ONLY findings that are explicitly present in the tool outputs below. Do NOT fabricate flags, credentials, or IPs.\n"
+            "2. Write in professional Bahasa Indonesia. Avoid excessive emoji — use only where structurally meaningful.\n"
+            "3. Be analytical and narrative, not just a list. Explain what each finding means operationally.\n"
+            "4. Every tool's key output must appear verbatim in the Capture/Evidence section.\n"
+            "5. The report must be immediately usable by a SOC analyst for decision-making."
         )
 
-        user_prompt = f"""Konteks Kasus / Target / Berkas:
+        user_prompt = f"""Konteks Target / Kasus:
 {previous_context}
 
-Hasil Eksekusi Tools (Simultaneous Execution Output):
+Output Eksekusi Tools (Verbatim):
 {outputs_str}
 
-Instruksi Penyusunan Laporan Investigasi SOC & CTF:
-Susun laporan dengan format Markdown lengkap berikut:
+---
 
-### 1. 🛡️ EXECUTIVE SUMMARY & SEVERITY TRIAGE
-- **Severity Level:** [CRITICAL / HIGH / MEDIUM / LOW / INFORMATIONAL]
-- **Kategori Ancaman:** [Web Exploitation / Network Forensics / Malware / Stego / Recon]
-- **Ringkasan Kasus:** [Deskripsi singkat 2-3 kalimat mengenai apa yang terjadi dan tingkat keparahan temuan]
+Susun laporan dalam format Markdown profesional berikut. Gunakan bahasa yang lugas, naratif, dan taktis.
+Jangan kaku — laporan harus enak dibaca namun tetap teknis dan presisi.
 
-### 2. 🔍 TEMUAN DETAIL PER-TOOL (DETAILED FINDINGS)
-- Uraikan temuan dari masing-masing tool secara terperinci:
-  - Port terbuka, service, banner, teknologi web (dari nmap/whatweb/wafw00f)
-  - Endpoint/direktori tersembunyi yang ditemukan (dari gobuster/ffuf/dirb)
-  - Kerentanan & potensi injeksi (dari sqlmap/nikto)
-  - Parameter URL, payload, kredensial yang bocor (jika ada)
-  - Anomali paket, DNS queries, HTTP streams, atau string penting (dari tshark/strings/binwalk)
+---
 
-### 3. 🎯 PEMETAAN MITRE ATT&CK MATRIX
-- **Tactic:** [Contoh: Initial Access / Reconnaissance / Discovery / Exfiltration]
-- **Technique ID & Name:** [Contoh: T1190 - Exploit Public-Facing Application, T1595 - Active Scanning]
-- **Deskripsi Aktivitas Terdeteksi:** [Korelasi temuan dengan teknik penyerang]
+# SECURITY INCIDENT & THREAT ANALYSIS REPORT
+**Disusun oleh:** KIIBOT SOC Engine  
+**Klasifikasi:** CONFIDENTIAL — Internal Use Only
 
-### 4. 🚩 INDICATORS OF COMPROMISE (IOCs) & ARTIFAK
-- **IP / Domain Terlibat:** [Daftar IP / Hostname]
-- **Flag CTF / Token / Kredensial:** [Ekstrak flag jika ada: KIIBOT{{...}}, flag{{...}}, dsb.]
-- **Endpoint Berbahaya / Hash:** [URL rentan atau file hash]
+---
 
-### 5. 🛠️ SOC CONTAINMENT & MITIGATION PLAYBOOK
-- **Tindakan Penanganan Cepat (Containment):** [Contoh: Rule iptables / Firewall block, WAF rule ModSecurity]
-- **Deteksi SIEM / IDS (Suricata/Snort):** [Contoh signature atau query hunting]
-- **Langkah Remediasi Sistem:** [Patching, config hardening]
+## I. Executive Summary
 
-### 6. ⚡ REKOMENDASI COMMAND LANJUTAN (LINUX CLI)
-- Berikan baris perintah nyata yang presisi untuk dijalankan di VPS jika investigasi perlu diperdalam.
+Tulis narasi 3–5 kalimat yang menjelaskan secara ringkas: apa yang diselidiki, apa yang ditemukan,
+dan seberapa kritis temuan tersebut. Hindari poin-poin di bagian ini — tulis seperti laporan eksekutif.
 
-Sajikan laporan secara menyeluruh, tajam, dan sangat mendetail."""
+**Severity Level:** [CRITICAL / HIGH / MEDIUM / LOW / INFORMATIONAL]  
+**Attack Category:** [Web Exploitation / Network Forensics / Binary Reversing / Steganography / Recon / Malware]
+
+---
+
+## II. Temuan Per-Tool (Evidence Capture)
+
+Untuk setiap tool yang dieksekusi, buat sub-bagian berisi:
+- Narasi singkat apa yang tool lakukan
+- Output kunci yang relevan ditampilkan dalam code block
+- Interpretasi teknis temuan tersebut
+
+Contoh format:
+
+### [Nama Tool]
+[Narasi singkat tujuan tool]
+
+```
+[Output verbatim tool yang paling relevan — jangan potong temuan penting]
+```
+
+**Interpretasi:** [Apa arti temuan ini? Apa implikasinya?]
+
+Lakukan untuk SEMUA tool yang menghasilkan output bermakna.
+
+---
+
+## III. Korelasi & Attack Chain Analysis
+
+Hubungkan temuan antar-tool secara naratif. Jelaskan bagaimana temuan dari tool A berkaitan
+dengan tool B, dan bagaimana ini membentuk gambaran serangan yang lebih besar atau vektor
+eksploitasi yang dapat digunakan.
+
+---
+
+## IV. MITRE ATT&CK Mapping
+
+| Tactic | Technique ID | Technique Name | Keterangan |
+|--------|-------------|----------------|------------|
+| [Tactic] | [T-ID] | [Nama Teknik] | [Korelasi ke temuan] |
+
+---
+
+## V. Indicators of Compromise (IOCs)
+
+| Tipe | Nilai | Keterangan |
+|------|-------|------------|
+| IP Address | — | — |
+| Domain/URL | — | — |
+| Hash (MD5/SHA) | — | — |
+| Flag / Credential | — | — |
+
+Isi dengan data nyata dari tool output. Jika tidak ada, tulis "Tidak ditemukan pada analisis ini."
+
+---
+
+## VI. SOC Containment & Mitigation Playbook
+
+Tulis langkah-langkah penanganan yang konkret dan dapat langsung dieksekusi:
+
+**Immediate Containment:**
+[Tindakan blokir, isolasi, atau shutdown yang perlu dilakukan segera]
+
+**Detection Rules (SIEM/IDS):**
+```
+[Contoh rule Suricata / Sigma / SPL query yang relevan jika ada]
+```
+
+**Remediation & Hardening:**
+[Langkah perbaikan sistem jangka panjang]
+
+---
+
+## VII. Next Steps — Advanced Investigation Commands
+
+Berikan perintah Linux CLI nyata dan presisi untuk investigasi lanjutan di VPS:
+
+```bash
+# [Deskripsi tujuan command]
+[command]
+```
+
+---
+
+Sajikan laporan ini secara lengkap, menyeluruh, dan tajam. Semua temuan dari tools harus masuk."""
 
         messages = [
             {"role": "system", "content": system_prompt},
@@ -376,7 +447,7 @@ Sajikan laporan secara menyeluruh, tajam, dan sangat mendetail."""
         ]
 
         try:
-            return await self.call_chat_completion(messages=messages, temperature=0.3)
+            return await self.call_chat_completion(messages=messages, temperature=0.25)
         except Exception as e:
             logger.error(f"Gagal memanggil AI analyze_results: {e}")
             return f"[ERROR] Terjadi kesalahan saat AI menganalisis hasil: {e!s}"

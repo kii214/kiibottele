@@ -1036,14 +1036,25 @@ async def _run_webattack_mode(update_or_query, context: ContextTypes.DEFAULT_TYP
         os.makedirs("reports", exist_ok=True)
         safe_target = re.sub(r"[^\w\-.]", "_", target_url)[:40]
         report_file_path = os.path.join("reports", f"SOC_Report_{mode.upper()}_{safe_target}.md")
+        from datetime import datetime
+        ts_now = datetime.now().strftime("%d %B %Y — %H:%M:%S WIB")
         with open(report_file_path, "w", encoding="utf-8") as f:
-            f.write(f"# KIIBOT SOC & CTF INCIDENT REPORT: {title}\n")
-            f.write(f"Target: {target_url}\n")
-            f.write(f"Timestamp: {os.popen('date').read().strip()}\n\n")
+            f.write("---\n")
+            f.write(f"# SECURITY INCIDENT & THREAT ANALYSIS REPORT\n\n")
+            f.write(f"**Engine:** KIIBOT SOC Automation Engine  \n")
+            f.write(f"**Tanggal Analisis:** {ts_now}  \n")
+            f.write(f"**Target:** {target_url}  \n")
+            f.write(f"**Mode Scan:** {title}  \n")
+            f.write(f"**Klasifikasi:** CONFIDENTIAL — Internal Use Only  \n\n")
+            f.write("---\n\n")
             f.write(ai_report)
-            f.write("\n\n---\n## RAW TOOLS OUTPUT DUMP\n\n")
+            f.write("\n\n---\n\n")
+            f.write("## Appendix — Raw Tool Output (Evidence Capture)\n\n")
+            f.write("> Bagian ini berisi output mentah lengkap dari setiap tool yang dieksekusi.\n\n")
             for tname, tout in tool_results.items():
-                f.write(f"### TOOL: {tname.upper()}\n```\n{tout}\n```\n\n")
+                if tout and str(tout).strip():
+                    f.write(f"### {tname.upper()}\n\n```\n{tout}\n```\n\n")
+
 
         # Kirim ringkasan chat
         if len(full_reply) > 3800:
