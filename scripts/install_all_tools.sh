@@ -102,7 +102,7 @@ _info "Installing: stegseek..."
 if ! command -v stegseek &>/dev/null; then
     STEGSEEK_URL="https://github.com/RickdeJager/stegseek/releases/download/v0.6/stegseek_0.6-1.deb"
     wget -q "$STEGSEEK_URL" -O /tmp/stegseek.deb 2>/dev/null && \
-    dpkg -i /tmp/stegseek.deb 2>/dev/null && _ok "stegseek" || _fail "stegseek"
+    apt-get install -yq /tmp/stegseek.deb 2>/dev/null && _ok "stegseek" || _fail "stegseek"
 else
     _ok "stegseek already installed"
 fi
@@ -345,7 +345,7 @@ if ! command -v die &>/dev/null && ! command -v diec &>/dev/null; then
     DIE_VER="3.09"
     wget -q "https://github.com/horsicq/Detect-It-Easy/releases/download/${DIE_VER}/die_${DIE_VER}_Ubuntu_22.04_amd64.deb" \
          -O /tmp/die.deb 2>/dev/null && \
-    dpkg -i /tmp/die.deb 2>/dev/null
+    apt-get install -yq /tmp/die.deb 2>/dev/null
     (command -v die &>/dev/null || command -v diec &>/dev/null) && _ok "detect-it-easy" || _fail "detect-it-easy"
 else
     _ok "detect-it-easy already installed"
@@ -361,7 +361,7 @@ if ! command -v trivy &>/dev/null; then
     wget -q "https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh" | bash -s -- -b /usr/local/bin 2>/dev/null || \
     (TRIVY_VER="0.52.0"; \
      wget -q "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VER}/trivy_${TRIVY_VER}_Linux-64bit.deb" \
-          -O /tmp/trivy.deb 2>/dev/null && dpkg -i /tmp/trivy.deb 2>/dev/null)
+          -O /tmp/trivy.deb 2>/dev/null && apt-get install -yq /tmp/trivy.deb 2>/dev/null)
     command -v trivy &>/dev/null && _ok "trivy" || _fail "trivy"
 else
     _ok "trivy already installed"
