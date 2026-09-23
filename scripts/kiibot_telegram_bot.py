@@ -1525,7 +1525,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(fallback_chat, parse_mode="HTML")
 
 
-async def _send_raw_results(update: Update, title: str, results_dict: dict, base_path: str):
+async def _send_raw_results(update_or_msg, title: str, results_dict: dict, base_path: str):
     """Membantu mengirimkan file teks mentah hasil eksekusi tools."""
     import json
     raw_path = f"{base_path}_raw_output.txt"
@@ -1539,8 +1539,15 @@ async def _send_raw_results(update: Update, title: str, results_dict: dict, base
                 f.write(str(v))
             f.write("\n\n")
     
+    # Ambil object message yang valid
+    msg = update_or_msg
+    if hasattr(update_or_msg, "message") and update_or_msg.message:
+        msg = update_or_msg.message
+    elif hasattr(update_or_msg, "callback_query") and update_or_msg.callback_query:
+        msg = update_or_msg.callback_query.message
+
     with open(raw_path, "rb") as doc:
-        await update.message.reply_document(
+        await msg.reply_document(
             document=doc,
             caption=f"⚙️ <b>Raw Tools Output:</b> {html.escape(title)}",
             parse_mode="HTML"
