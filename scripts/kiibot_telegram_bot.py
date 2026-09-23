@@ -449,21 +449,81 @@ async def triage_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def tools_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Menampilkan daftar kategori tools yang terintegrasi di KIIBOT."""
+    """Menampilkan daftar 85+ tools KIIBOT PRO dengan SOP step labels."""
     if not check_auth(update) or not update.message:
         return
 
-    tools_summary = "<b>[ KIIBOT TOOL REGISTRY & DISCOVERY ]</b>\n\n"
-    
+    total_tools = sum(len(v) for v in TOOL_REGISTRY.values())
+    total_cats = len(TOOL_REGISTRY)
+
+    tools_summary = (
+        f"<b>[ 🛠️ KIIBOT PRO — TOOL REGISTRY ]</b>\n"
+        f"<code>TOTAL: {total_tools} TOOLS | {total_cats} KATEGORI | MODE: PRO EXECUTION</code>\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+    )
+
+    cat_icons = {
+        "forensics": "🔬", "steganography": "🖼️", "cryptography": "🔐",
+        "network": "🌐", "log_analysis": "📋", "web": "⚔️",
+        "reverse_engineering": "⚙️", "osint": "🌍", "osint_github": "🐙",
+        "soc_triage": "🛡️", "siem_integration": "📡", "malware_analysis": "🦠",
+        "exploit_dev": "💣", "password_attacks": "🔑", "container_security": "📦",
+    }
+
     for category, tools_dict in TOOL_REGISTRY.items():
-        tool_names = ", ".join([f"{name}" for name in list(tools_dict.keys())[:5]])
-        tools_summary += f"<b>» {category.upper()}:</b>\n  <code>{tool_names}</code>\n\n"
-        
+        icon = cat_icons.get(category, "🔧")
+        count = len(tools_dict)
+        tool_names = ", ".join(list(tools_dict.keys())[:6])
+        extras = f" +{count - 6} more" if count > 6 else ""
+        first_tool = next(iter(tools_dict.values()), {})
+        sop = first_tool.get("sop_step", "")
+        sop_str = f"\n  <i>📌 {html.escape(sop)}</i>" if sop else ""
+        cat_label = category.upper().replace('_', ' ')
+        tools_summary += (
+            f"{icon} <b>{html.escape(cat_label)} ({count} tools):</b>\n"
+            f"  <code>{html.escape(tool_names)}{extras}</code>{sop_str}\n\n"
+        )
+
     tools_summary += (
-        "<i>💡 Tips: Gunakan <code>/findtool &lt;nama_tool&gt;</code> untuk mengecek ketersediaan tool spesifik di VPS.</i>"
+        "<i>💡 Gunakan <code>/findtool &lt;nama&gt;</code> untuk cek tool spesifik.\n"
+        "   Gunakan <code>/insttools</code> untuk panduan install semua tools.</i>"
     )
     await update.message.reply_text(tools_summary, parse_mode="HTML")
 
+
+async def insttools_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Panduan install semua 85+ tools di VPS."""
+    if not check_auth(update) or not update.message:
+        return
+
+    msg = (
+        "<b>[ 🚀 PANDUAN INSTALL 85+ TOOLS KIIBOT PRO ]</b>\n"
+        "<code>Target: Ubuntu 22.04 / 24.04 LTS VPS</code>\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        "<b>STEP 1: Clone repo terbaru</b>\n"
+        "<code>cd ~\ngit clone https://github.com/kii214/kiibottele.git\ncd kiibottele</code>\n\n"
+        "<b>STEP 2: Jalankan installer otomatis (14 langkah)</b>\n"
+        "<code>sudo bash scripts/install_all_tools.sh</code>\n\n"
+        "<b>STEP 3: Aktifkan venv &amp; jalankan bot</b>\n"
+        "<code>python3 -m venv venv\nsource venv/bin/activate\npip install -e .\n"
+        "cp .env.example .env &amp;&amp; nano .env\npython3 scripts/kiibot_telegram_bot.py</code>\n\n"
+        "<b>STEP 4: Verifikasi tools terpasang</b>\n"
+        "<code>/doctor</code> — Cek status semua 85+ tools\n"
+        "<code>/findtool nmap</code> — Cek tool spesifik\n\n"
+        "<b>📦 15 Kategori Tools:</b>\n"
+        "🔬 Forensics: exiftool, binwalk, volatility3, oletools, yara\n"
+        "🖼️ Stego: steghide, stegseek, zsteg, outguess, tesseract\n"
+        "🔐 Crypto: hashcat, john, RsaCtfTool, jwt_tool, fcrackzip\n"
+        "🌐 Network: tshark, nmap, masscan, wireshark\n"
+        "⚔️ Web: gobuster, ffuf, nuclei, wpscan, sqlmap, nikto, hydra, medusa\n"
+        "⚙️ RE/Pwn: radare2, gdb, pwntools, ROPgadget, one_gadget, checksec\n"
+        "🌍 OSINT: theHarvester, subfinder, amass, shodan\n"
+        "🐙 Leaks: trufflehog, gitleaks\n"
+        "🦠 Malware: clamav, yara, detect-it-easy\n"
+        "📦 Container: trivy, docker inspect\n\n"
+        "<i>Estimasi waktu install: 5-15 menit tergantung koneksi VPS.</i>"
+    )
+    await update.message.reply_text(msg, parse_mode="HTML")
 
 async def findtool_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
