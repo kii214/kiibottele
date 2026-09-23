@@ -35,6 +35,8 @@ venv.bak/
 
 # Environment Variables
 .env
+configs/ai_keys.json
+configs/ai_keys.txt
 
 # KIIBOT Specifics
 .kiibot/

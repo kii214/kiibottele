@@ -141,7 +141,10 @@ class AIOrchestrator:
         """Inisialisasi AsyncOpenAI client untuk key tertentu."""
         if not HAS_OPENAI or not AsyncOpenAI:
             return None
-        return AsyncOpenAI(api_key=api_key, base_url=self.base_url)
+        headers = {}
+        if "generativelanguage.googleapis.com" in self.base_url:
+            headers["x-goog-api-key"] = api_key
+        return AsyncOpenAI(api_key=api_key, base_url=self.base_url, default_headers=headers if headers else None)
 
     def _is_quota_or_auth_error(self, error: Exception) -> bool:
         """Mendeteksi apakah error disebabkan oleh kuota habis, rate limit, atau token invalid."""
