@@ -636,6 +636,52 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await status_msg.edit_text(f"❌ <b>Error analisis:</b> <code>{html.escape(str(e))}</code>", parse_mode="HTML")
 
 
+async def report_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    /report atau /reportsoc — Menghasilkan Laporan SOC & CTF Konsolidasi Multi-Tugas
+    dalam format Word (.docx), PDF, atau Markdown (.md).
+    """
+    if not check_auth(update) or not update.message:
+        return
+
+    try:
+        from kiibot.database.db import get_database
+        db = get_database()
+        active_session = db.get_active_ctf_session()
+        session_id = active_session.id if active_session else 1
+        stats = db.get_ctf_stats(session_id)
+    except Exception:
+        session_id = 1
+        stats = {"targets": 0, "attacks": 0, "findings": 0, "evidence": 0}
+
+    msg_text = (
+        "<b>[ 🛡️ GENERATOR LAPORAN SOC &amp; CTF KONSOLIDASI ]</b>\n\n"
+        f"<b>Session ID:</b> <code>SESSION-{session_id:03d}</code>\n"
+        f"<b>Total Target:</b> <code>{stats.get('targets', 0)}</code>\n"
+        f"<b>Total Attack / Task:</b> <code>{stats.get('attacks', 0)}</code>\n"
+        f"<b>Total Findings:</b> <code>{stats.get('findings', 0)}</code>\n"
+        f"<b>Total Evidence:</b> <code>{stats.get('evidence', 0)}</code>\n\n"
+        "<i>Pilih format dokumen laporan SOC profesional yang ingin diunduh:</i>"
+    )
+
+    keyboard = [
+        [
+            InlineKeyboardButton("📝 Download Word (.docx)", callback_data=f"gen_report_docx_{session_id}"),
+            InlineKeyboardButton("📄 Download PDF", callback_data=f"gen_report_pdf_{session_id}"),
+        ],
+        [
+            InlineKeyboardButton("📋 Download Markdown (.md)", callback_data=f"gen_report_md_{session_id}"),
+        ],
+    ]
+
+    await update.message.reply_text(
+        msg_text,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode="HTML"
+    )
+
+
+
 # =====================================================================
 # WEB ATTACK CTF MODULE — /webattack <url>
 # =====================================================================
@@ -1020,6 +1066,47 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
         }
         mode = mode_map.get(data, "all")
         await _run_webattack_mode(update, context, target_url, mode)
+
+    elif data.startswith("gen_report_"):
+        parts = data.split("_")
+        fmt = parts[2] if len(parts) > 2 else "docx"  # docx, pdf, md
+        sess_id = int(parts[3]) if len(parts) > 3 else 1
+
+        status_msg = await query.message.reply_text(
+            f"⏳ <b>[ REPORT GENERATOR ]</b> Menyusun laporan SOC konsolidasi dalam format <code>{fmt.upper()}</code>...",
+            parse_mode="HTML"
+        )
+        try:
+            from kiibot.ctf.report_generator import CTFReportGenerator
+            rg = CTFReportGenerator()
+
+            if fmt == "docx":
+                out_path = rg.generate_docx(sess_id)
+                caption = "📝 <b>Laporan SOC Konsolidasi (.docx)</b>\nSiap diedit dan dipresentasikan di Microsoft Word."
+            elif fmt == "pdf":
+                out_path = rg.generate_pdf(sess_id)
+                caption = "📄 <b>Laporan SOC Konsolidasi (.pdf)</b>"
+            else:
+                out_path = rg.generate(sess_id)
+                caption = "📋 <b>Laporan SOC Konsolidasi (.md)</b>"
+
+            with open(out_path, "rb") as doc_file:
+                await query.message.reply_document(
+                    document=doc_file,
+                    caption=caption,
+                    parse_mode="HTML"
+                )
+            try:
+                await status_msg.delete()
+            except Exception:
+                pass
+        except Exception as e:
+            logger.error(f"Gagal generate report ({fmt}): {e}")
+            await status_msg.edit_text(
+                f"❌ <b>Gagal membuat laporan {fmt.upper()}:</b> <code>{html.escape(str(e))}</code>",
+                parse_mode="HTML"
+            )
+
 
 
 # =====================================================================
@@ -1524,6 +1611,7 @@ def main():
     app.add_handler(CommandHandler("decode", decode_command))
     app.add_handler(CommandHandler("analyze", analyze_command))
     app.add_handler(CommandHandler("report", report_command))
+    app.add_handler(CommandHandler("reportsoc", report_command))
     # Web Attack CTF Module
     app.add_handler(CommandHandler("webattack", webattack_command))
     app.add_handler(CommandHandler("scan", scan_command))

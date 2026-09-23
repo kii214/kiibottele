@@ -430,6 +430,233 @@ class CTFReportGenerator:
             logger.error("Gagal membuat PDF. Apakah wkhtmltopdf sudah terinstall? Error: %s", e)
             raise RuntimeError("Gagal membuat PDF. wkhtmltopdf mungkin belum terinstall.") from e
 
+    def generate_docx(self, session_id: int, output_path: Path | None = None) -> Path:
+        """Generate laporan SOC & CTF dalam format Microsoft Word (.docx)."""
+        try:
+            import docx
+            from docx import Document
+            from docx.enum.table import WD_TABLE_ALIGNMENT
+            from docx.enum.text import WD_ALIGN_PARAGRAPH
+            from docx.oxml import OxmlElement
+            from docx.oxml.ns import qn
+            from docx.shared import Inches, Pt, RGBColor
+        except ImportError as e:
+            logger.error("python-docx belum terinstall. Install dengan: pip install python-docx")
+            raise RuntimeError("Gagal membuat Word (.docx). python-docx belum terinstall.") from e
+
+        from kiibot.core.constants import KIIBOT_DIR
+
+        data = _collect(self.db, session_id)
+        assert data.session is not None
+
+        doc = Document()
+
+        def set_cell_bg(cell: Any, hex_color: str) -> None:
+            tcPr = cell._tc.get_or_add_tcPr()
+            shd = OxmlElement("w:shd")
+            shd.set(qn("w:val"), "clear")
+            shd.set(qn("w:color"), "auto")
+            shd.set(qn("w:fill"), hex_color)
+            tcPr.append(shd)
+
+        # Set default font
+        normal_style = doc.styles["Normal"]
+        normal_style.font.name = "Calibri"
+        normal_style.font.size = Pt(11)
+        normal_style.font.color.rgb = RGBColor(0x1A, 0x1A, 0x2E)
+
+        # Document Header Title
+        title_p = doc.add_paragraph()
+        title_p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        title_run = title_p.add_run("🛡️ LAPORAN INVESTIGASI INSIDEN & FORENSIK SIBER (SOC)")
+        title_run.font.size = Pt(18)
+        title_run.font.bold = True
+        title_run.font.color.rgb = RGBColor(0x0F, 0x34, 0x60)
+
+        subtitle_p = doc.add_paragraph()
+        subtitle_p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        sub_run = subtitle_p.add_run(
+            f"Kompetisi / Target: {data.session.competition or 'Cyber Operations'}\n"
+            f"Tim / Observer: {data.session.team or 'KIIBOT SOC Team'}"
+        )
+        sub_run.font.size = Pt(11)
+        sub_run.font.italic = True
+        sub_run.font.color.rgb = RGBColor(0xE9, 0x45, 0x60)
+
+        doc.add_paragraph()
+
+        # Metadata Table
+        meta_table = doc.add_table(rows=6, cols=2)
+        meta_table.alignment = WD_TABLE_ALIGNMENT.CENTER
+        meta_data = [
+            ("Session ID", f"SESSION-{data.session.id:03d}"),
+            ("Status Sesi", str(data.session.status)),
+            ("Waktu Mulai", _fmt_ts(data.session.start_time)),
+            ("Waktu Selesai", _fmt_ts(data.session.end_time) if data.session.end_time else "Masih Berlangsung"),
+            ("Durasi", _duration_str(data.session.start_time, data.session.end_time) if data.session.end_time else "N/A"),
+            ("Tanggal Laporan", datetime.now().strftime("%d/%m/%Y %H:%M WIB")),
+        ]
+        for idx, (k, v) in enumerate(meta_data):
+            cell_k = meta_table.cell(idx, 0)
+            cell_v = meta_table.cell(idx, 1)
+            cell_k.text = k
+            cell_v.text = v
+            if cell_k.paragraphs[0].runs:
+                cell_k.paragraphs[0].runs[0].font.bold = True
+            set_cell_bg(cell_k, "F0F4FF")
+
+        doc.add_paragraph()
+
+        # 1. Ringkasan Eksekutif
+        h1 = doc.add_heading("1. Ringkasan Eksekutif", level=1)
+        if h1.runs:
+            h1.runs[0].font.color.rgb = RGBColor(0x0F, 0x34, 0x60)
+
+        stats = self.db.get_ctf_stats(data.session.id)
+        doc.add_paragraph(
+            f"Laporan ini mengonsolidasikan hasil analisis dan investigasi SOC untuk sesi {data.session.competition or 'SOC'}. "
+            f"Sesi ini mencakup {stats.get('targets', 0)} target, {stats.get('challenges', 0)} tantangan/insiden, "
+            f"{stats.get('attacks', 0)} investigasi attack, dan {stats.get('findings', 0)} temuan kerentanan (findings)."
+        )
+
+        # Exec stats table
+        stats_table = doc.add_table(rows=1, cols=4)
+        stats_table.alignment = WD_TABLE_ALIGNMENT.CENTER
+        hdr_cells = stats_table.rows[0].cells
+        headers = ["Metrik", "Jumlah", "Metrik", "Jumlah"]
+        for i, h in enumerate(headers):
+            hdr_cells[i].text = h
+            if hdr_cells[i].paragraphs[0].runs:
+                hdr_cells[i].paragraphs[0].runs[0].font.bold = True
+                hdr_cells[i].paragraphs[0].runs[0].font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
+            set_cell_bg(hdr_cells[i], "0F3460")
+
+        row1 = stats_table.add_row().cells
+        row1[0].text = "Total Target"
+        row1[1].text = str(stats.get("targets", 0))
+        row1[2].text = "Total Attack/Investigasi"
+        row1[3].text = str(stats.get("attacks", 0))
+
+        row2 = stats_table.add_row().cells
+        row2[0].text = "Total Findings"
+        row2[1].text = str(stats.get("findings", 0))
+        row2[2].text = "Total Evidence"
+        row2[3].text = str(stats.get("evidence", 0))
+
+        doc.add_paragraph()
+
+        # 2. Konsolidasi Multi-Tugas
+        h2 = doc.add_heading("2. Konsolidasi Hasil Multi-Tugas & Investigasi", level=1)
+        if h2.runs:
+            h2.runs[0].font.color.rgb = RGBColor(0x0F, 0x34, 0x60)
+
+        doc.add_paragraph(
+            "Berikut adalah hasil konsolidasi analisis gabungan dari berbagai jenis tugas "
+            "(Trafik PCAP, Analisis Log, AI Vision Screenshot, Binary Reversing, dan MITRE ATT&CK):"
+        )
+
+        if data.attacks:
+            h_atk = doc.add_heading("2.1 Hasil Investigasi & Attack Analysis", level=2)
+            if h_atk.runs:
+                h_atk.runs[0].font.color.rgb = RGBColor(0x16, 0x21, 0x3E)
+
+            for atk in data.attacks:
+                p_a = doc.add_paragraph()
+                r_a = p_a.add_run(f"📌 Task ID: {atk.attack_id} — Tool: {atk.tool_used}")
+                r_a.font.bold = True
+                r_a.font.size = Pt(11)
+
+                p_detail = doc.add_paragraph()
+                p_detail.add_run(f"Tujuan: {atk.objective or '-'}\n")
+                p_detail.add_run(f"Command / Aksi: {atk.command_run or atk.action or '-'}\n")
+                p_detail.add_run(f"Hasil Analisis: {atk.result or '-'}\n")
+
+        if data.findings:
+            h_fnd = doc.add_heading("2.2 Temuan Security & Vulnerabilities (Findings)", level=2)
+            if h_fnd.runs:
+                h_fnd.runs[0].font.color.rgb = RGBColor(0x16, 0x21, 0x3E)
+
+            fnd_table = doc.add_table(rows=1, cols=5)
+            fnd_table.alignment = WD_TABLE_ALIGNMENT.CENTER
+            f_hdrs = ["ID", "Judul Kerentanan", "Severity", "CVSS", "Komponen"]
+            for i, h in enumerate(f_hdrs):
+                fnd_table.rows[0].cells[i].text = h
+                if fnd_table.rows[0].cells[i].paragraphs[0].runs:
+                    fnd_table.rows[0].cells[i].paragraphs[0].runs[0].font.bold = True
+                    fnd_table.rows[0].cells[i].paragraphs[0].runs[0].font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
+                set_cell_bg(fnd_table.rows[0].cells[i], "0F3460")
+
+            sev_colors = {
+                "critical": "FF0033",
+                "high": "FF6B00",
+                "medium": "F0A500",
+                "low": "0066CC",
+                "info": "6C757D",
+            }
+
+            for f in data.findings:
+                row_cells = fnd_table.add_row().cells
+                row_cells[0].text = f.finding_id
+                row_cells[1].text = f.title
+                row_cells[2].text = f.severity.upper()
+                row_cells[3].text = str(f.cvss_score or "N/A")
+                row_cells[4].text = f.affected_component or "-"
+
+                bg = sev_colors.get(f.severity.lower(), "FFFFFF")
+                set_cell_bg(row_cells[2], bg)
+                if row_cells[2].paragraphs[0].runs:
+                    row_cells[2].paragraphs[0].runs[0].font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
+                    row_cells[2].paragraphs[0].runs[0].font.bold = True
+
+        doc.add_paragraph()
+
+        # 3. Evidence Ledger
+        if data.evidence:
+            h3 = doc.add_heading("3. Evidence Ledger & Output Tools", level=1)
+            if h3.runs:
+                h3.runs[0].font.color.rgb = RGBColor(0x0F, 0x34, 0x60)
+
+            ev_table = doc.add_table(rows=1, cols=4)
+            ev_table.alignment = WD_TABLE_ALIGNMENT.CENTER
+            e_hdrs = ["ID Evidence", "Tipe Artefak", "Deskripsi", "Path File / Relasi"]
+            for i, h in enumerate(e_hdrs):
+                ev_table.rows[0].cells[i].text = h
+                if ev_table.rows[0].cells[i].paragraphs[0].runs:
+                    ev_table.rows[0].cells[i].paragraphs[0].runs[0].font.bold = True
+                    ev_table.rows[0].cells[i].paragraphs[0].runs[0].font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
+                set_cell_bg(ev_table.rows[0].cells[i], "0F3460")
+
+            for e in data.evidence:
+                r_cells = ev_table.add_row().cells
+                r_cells[0].text = e.evidence_id
+                r_cells[1].text = e.artifact_type
+                r_cells[2].text = e.description
+                r_cells[3].text = e.artifact_path or e.related_attack or "-"
+
+        doc.add_paragraph()
+
+        # 4. Rekomendasi & Kesimpulan
+        h4 = doc.add_heading("4. Kesimpulan & Rekomendasi Remediasi", level=1)
+        if h4.runs:
+            h4.runs[0].font.color.rgb = RGBColor(0x0F, 0x34, 0x60)
+
+        doc.add_paragraph(
+            "1. Lakukan patching dan perbaikan sesuai urutan keparahan (Critical -> High -> Medium).\n"
+            "2. Lakukan hardening pada jaringan dan server terkait untuk mencegah eksploitasi berulang.\n"
+            "3. Pantau log SIEM secara terus-menerus dan terapkan rule deteksi untuk pola serangan yang teridentifikasi."
+        )
+
+        if output_path is None:
+            reports_dir = KIIBOT_DIR / "reports"
+            reports_dir.mkdir(parents=True, exist_ok=True)
+            comp = re.sub(r"[^\w\-]", "_", data.session.competition or "SOC")
+            ts = datetime.now().strftime("%Y%m%d_%H%M")
+            output_path = reports_dir / f"Laporan_SOC_Konsolidasi_{comp}_{ts}.docx"
+
+        doc.save(str(output_path))
+        logger.info("Laporan Word (.docx) berhasil disimpan ke: %s", output_path)
+        return output_path
+
     def _build_report(self, d: _SessionData) -> str:
         """Susun seluruh konten laporan sebagai Markdown."""
         assert d.session is not None
