@@ -1166,18 +1166,7 @@ async def _run_webattack_mode(update_or_query, context: ContextTypes.DEFAULT_TYP
         await status_msg.edit_text(
             f"❌ <b>Error saat menjalankan {title}:</b>\n<code>{html.escape(str(e))}</code>",
             parse_mode="HTML"
-        )full_reply)
-                tmp_path = f.name
-            with open(tmp_path, 'rb') as doc:
-                await msg_obj.reply_document(
-                    document=doc,
-                    caption=f"📋 <b>Web Attack Report: {html.escape(title)} — {html.escape(target_url[:50])}</b>",
-                    parse_mode="HTML"
-                )
-        else:
-            await status_msg.edit_text(full_reply, parse_mode="HTML")
-
-        # Tampilkan kembali sub-menu untuk serangan lanjutan
+        )
         await msg_obj.reply_text(
             f"✅ <b>{title} selesai.</b> Pilih mode lain untuk melanjutkan:\n"
             f"<code>Target: {html.escape(target_url)}</code>",
