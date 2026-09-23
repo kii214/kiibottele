@@ -154,6 +154,30 @@ TOOL_REGISTRY = {
             "when_to_use": "File PNG — mencari custom chunk data yang tidak standar.",
             "mitre_technique": "T1027.003"
         },
+        "stegsnow": {
+            "cmd": ["stegsnow", "-C"],
+            "args_append_target": True,
+            "desc": "Ekstraksi whitespace steganography tersembunyi pada file teks / code.",
+            "output_limit": 2000,
+            "when_to_use": "File teks, source code, ASCII art dengan whitespace mencurigakan.",
+            "mitre_technique": "T1027.003"
+        },
+        "zbarimg": {
+            "cmd": ["zbarimg", "--raw"],
+            "args_append_target": True,
+            "desc": "Scan & decode QR code atau barcode langsung dari gambar CTF.",
+            "output_limit": 1000,
+            "when_to_use": "Gambar berisi QR code / Barcode.",
+            "mitre_technique": "T1140"
+        },
+        "tesseract": {
+            "cmd": ["tesseract", None, "stdout"],
+            "args_target_index": 1,
+            "desc": "Optical Character Recognition (OCR) — ekstrak teks/flag dari gambar soal CTF.",
+            "output_limit": 2000,
+            "when_to_use": "Gambar teks yang sulit dicopy.",
+            "mitre_technique": "T1005"
+        },
         "outguess": {
             "cmd": ["outguess", "-r"],
             "args_append_target": True,
@@ -496,6 +520,30 @@ TOOL_REGISTRY = {
             "output_limit": 2000,
             "when_to_use": "Binary yang berinteraksi dengan sistem/file — lihat apa yang dilakukannya.",
             "mitre_technique": "T1012"
+        },
+        "radare2": {
+            "cmd": ["r2", "-qc", "aaa; afl; pdf @main", None],
+            "args_target_index": 3,
+            "desc": "Disassembly & fungsi analisis mendalam menggunakan Radare2 framework.",
+            "output_limit": 3000,
+            "when_to_use": "Binary ELF/PE untuk membedah logika fungsi main.",
+            "mitre_technique": "T1012"
+        },
+        "gdb": {
+            "cmd": ["gdb", "-batch", "-ex", "info files", "-ex", "disassemble main", None],
+            "args_target_index": 6,
+            "desc": "GNU Debugger batch inspection untuk analisis file binary.",
+            "output_limit": 2500,
+            "when_to_use": "Binary inspection sebelum dynamic execution.",
+            "mitre_technique": "T1012"
+        },
+        "upx": {
+            "cmd": ["upx", "-t"],
+            "args_append_target": True,
+            "desc": "Uji dan periksa apakah binary dipack / dikompres dengan UPX packer.",
+            "output_limit": 1000,
+            "when_to_use": "Binary yang dipack untuk unpacking.",
+            "mitre_technique": "T1027.002"
         },
     },
 
