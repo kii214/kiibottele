@@ -28,7 +28,7 @@ class AIOrchestrator:
 
     def __init__(self):
         self.base_url = os.getenv("AI_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai/")
-        self.model = os.getenv("AI_MODEL", "gemini-2.0-flash")
+        self.model = os.getenv("AI_MODEL", "gemini-1.5-flash")
         self.api_keys: list[str] = self._load_api_keys()
         # Reset state agar key yang sebelumnya gagal karena bug auth dicoba ulang
         AIOrchestrator._active_key_index = 0
@@ -216,6 +216,7 @@ class AIOrchestrator:
                 return response.choices[0].message.content or ""
 
             except Exception as e:
+                last_error = e
                 logger.error(f"[AI POOL] Error pada API Key #{curr_idx + 1}: {e}")
 
                 if self._is_quota_or_auth_error(e):
@@ -234,7 +235,10 @@ class AIOrchestrator:
                     AIOrchestrator._active_key_index = (curr_idx + 1) % total_keys
                     attempts += 1
 
-        raise RuntimeError(f"Semua {total_keys} API Key telah dicoba dan kuotanya habis atau tidak valid!")
+        if attempts > 0 and 'last_error' in locals():
+            raise RuntimeError(f"Semua {total_keys} API Key gagal (Last error: {last_error})")
+        else:
+            raise RuntimeError(f"Semua {total_keys} API Key telah dicoba dan kuotanya habis atau tidak valid!")
 
     async def ask_ai(self, user_question: str, system_prompt: str = "") -> str:
         """Helper praktis untuk menanyakan pertanyaan umum ke AI dengan failover aktif."""

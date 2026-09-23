@@ -606,7 +606,7 @@ TOOL_REGISTRY = {
             "args_target_index": 2,
             "desc": "Automated SQL Injection tool (level=3 untuk deteksi lebih komprehensif). HANYA untuk target yang diizinkan.",
             "output_limit": 2000,
-            "timeout": 120.0,
+            "timeout": 300.0,
             "when_to_use": "URL dengan parameter GET/POST yang dicurigai vulnerable terhadap SQLi.",
             "mitre_technique": "T1190",
             "sop_step": "SOC-WEB-004: SQLi Scan"
@@ -617,7 +617,7 @@ TOOL_REGISTRY = {
             "args_target_index": 2,
             "desc": "SQLmap mode FULL: enumerate semua database, dump tabel users, cari username & password.",
             "output_limit": 3000,
-            "timeout": 180.0,
+            "timeout": 600.0,
             "when_to_use": "Soal CTF SQLi — dump semua data termasuk tabel users, kredensial, dan flag.",
             "mitre_technique": "T1190",
             "sop_step": "SOC-WEB-004: SQLi Full Dump"
@@ -627,7 +627,7 @@ TOOL_REGISTRY = {
             "args_append_target": True,
             "desc": "Web vulnerability scanner yang mencari misconfiguration dan celah umum.",
             "output_limit": 2000,
-            "timeout": 60.0,
+            "timeout": 180.0,
             "when_to_use": "URL target web CTF untuk menemukan direktori tersembunyi, celah default.",
             "mitre_technique": "T1595.002",
             "sop_step": "SOC-WEB-005: Web Vuln Scan"
@@ -638,18 +638,18 @@ TOOL_REGISTRY = {
             "args_target_index": 3,
             "desc": "Directory/endpoint brute-forcer cepat (50 threads) untuk menemukan halaman tersembunyi.",
             "output_limit": 2000,
-            "timeout": 60.0,
+            "timeout": 120.0,
             "when_to_use": "URL target web CTF — mencari direktori tersembunyi seperti /admin, /backup, /flag.",
             "mitre_technique": "T1595.003",
             "sop_step": "SOC-WEB-006: Directory Enumeration"
         },
         "ffuf": {
-            "cmd": ["ffuf", "-u", None, "-w", "/usr/share/wordlists/dirb/common.txt:FUZZ",
+            "cmd": ["ffuf", "-u", "%TARGET%/FUZZ", "-w", "/usr/share/wordlists/dirb/common.txt:FUZZ",
                     "-mc", "200,301,302,403", "-c", "-s"],
-            "args_target_index": 2,
+            "args_template": True,
             "desc": "Fast web fuzzer — support FUZZ placeholder untuk directory, parameter, dan vhost.",
             "output_limit": 2000,
-            "timeout": 60.0,
+            "timeout": 120.0,
             "when_to_use": "Web fuzzing untuk directory, parameter, atau virtual host enumeration.",
             "mitre_technique": "T1595.003",
             "sop_step": "SOC-WEB-006: Web Fuzzing"
