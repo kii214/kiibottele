@@ -44,6 +44,7 @@ echo -e "${CYAN}  Target: Ubuntu 22.04 / 24.04 LTS VPS${NC}\n"
 # ──────────────────────────────────────────────
 _head "STEP 1: Update System & Base Dependencies"
 export DEBIAN_FRONTEND=noninteractive
+export PIP_BREAK_SYSTEM_PACKAGES=1
 apt-get update -qq
 apt-get install -yq --no-install-recommends \
     curl wget git python3 python3-pip python3-venv python3-dev \
