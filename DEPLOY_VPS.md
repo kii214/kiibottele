@@ -46,6 +46,7 @@ python3 -m venv venv
 source venv/bin/activate
 pip install --upgrade pip
 pip install -e .
+pip install python-docx
 ```
 
 ### Step 4 — Konfigurasi Environment
@@ -243,11 +244,11 @@ source venv/bin/activate
 pip install openai python-telegram-bot
 ```
 
-### ❌ Error: Bot token belum diisi
+### ❌ Git Clone Minta Password / Authentication Failed 403
 ```bash
-# Pastikan .env sudah diisi dan venv aktif
-source venv/bin/activate
-cat .env | grep TELEGRAM_BOT_TOKEN
+# Gunakan Personal Access Token (PAT) langsung di URL clone:
+git clone https://YOUR_TOKEN@github.com/kii214/kiibottele.git
+# Atau ubah repository Anda dari Private menjadi Public di Settings GitHub
 ```
 
 ---
@@ -266,6 +267,7 @@ cat .env | grep TELEGRAM_BOT_TOKEN
 | `/mitre T1190` | Detail teknik MITRE ATT&CK |
 | `/decode <teks>` | Multi-stage auto-decode |
 | `/analyze <payload>` | Deep AI analysis expert |
+| `/reportsoc` | **Generator Laporan SOC Konsolidasi Multi-Tugas (Word .docx & PDF)** |
 | Kirim `.pcap` | Expert Wireshark battery (8 tools paralel) |
 | Kirim `.log` | Concurrent log battery (8 investigasi) |
 | Kirim foto/screenshot | AI Vision: bedah soal CTF + tools + solusi |
