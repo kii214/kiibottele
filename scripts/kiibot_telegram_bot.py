@@ -875,6 +875,77 @@ async def scan_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await webattack_command(update, context)
 
 
+def _build_fallback_report(tool_results: dict, target: str, mode_title: str) -> str:
+    """
+    Menyusun laporan terstruktur profesional dari output tools mentah
+    ketika AI tidak tersedia atau semua API key habis kuotanya.
+    """
+    from datetime import datetime
+    ts = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+
+    lines = []
+    lines.append(f"# SECURITY SCAN REPORT — {mode_title}")
+    lines.append(f"**Target:** {target}")
+    lines.append(f"**Waktu Analisis:** {ts}")
+    lines.append(f"**Mode:** Structured Report (AI Engine Offline)")
+    lines.append("")
+    lines.append("---")
+    lines.append("")
+    lines.append("## I. Executive Summary")
+    lines.append("")
+    tools_with_output = [t for t, o in tool_results.items() if o and str(o).strip() and len(str(o).strip()) > 10]
+    lines.append(f"Scan terhadap target `{target}` menggunakan mode **{mode_title}** telah selesai dieksekusi. ")
+    lines.append(f"Total **{len(tools_with_output)}** dari {len(tool_results)} tools menghasilkan output bermakna. ")
+    lines.append("Laporan ini disusun secara otomatis dari output tools tanpa analisis AI karena API key tidak tersedia.")
+    lines.append("")
+
+    # Deteksi otomatis flag & creds dari raw output
+    raw_str = str(tool_results)
+    import re
+    flags = re.findall(r"((?:CTF|FLAG|KIIBOT|picoCTF|HTB|THM)\{[^}]+\})", raw_str, re.IGNORECASE)
+    creds = re.findall(r"(?:password|passwd|pass|pwd|credential)[\s:=]+([\w@!#$%^&*()_+=-]{4,30})", raw_str, re.IGNORECASE)
+
+    if flags:
+        lines.append(f"**FLAG DITEMUKAN:** `{'`, `'.join(set(flags))}`")
+        lines.append("")
+    if creds:
+        lines.append(f"**POTENSI KREDENSIAL:** `{'`, `'.join(set(list(set(creds))[:5]))}`")
+        lines.append("")
+
+    lines.append("---")
+    lines.append("")
+    lines.append("## II. Temuan Per-Tool (Evidence Capture)")
+    lines.append("")
+
+    for tool_name, tool_output in tool_results.items():
+        output_str = str(tool_output).strip() if tool_output else ""
+        if not output_str or len(output_str) < 5:
+            continue
+
+        lines.append(f"### {tool_name.upper()}")
+        lines.append("")
+        lines.append("```")
+        # Batasi output agar file tidak terlalu besar
+        if len(output_str) > 4000:
+            lines.append(output_str[:4000])
+            lines.append(f"... [TRUNCATED — {len(output_str)} chars total]")
+        else:
+            lines.append(output_str)
+        lines.append("```")
+        lines.append("")
+
+    lines.append("---")
+    lines.append("")
+    lines.append("## III. Catatan")
+    lines.append("")
+    lines.append("Laporan ini dihasilkan tanpa AI analysis engine. Untuk mendapatkan laporan SOC lengkap ")
+    lines.append("dengan MITRE ATT&CK mapping, korelasi attack chain, IOC table, dan containment playbook, ")
+    lines.append("perbarui API key Gemini di `configs/ai_keys.json` atau melalui perintah `/aikeys`.")
+    lines.append("")
+
+    return "\n".join(lines)
+
+
 async def _run_webattack_mode(update_or_query, context: ContextTypes.DEFAULT_TYPE,
                                target_url: str, mode: str):
     """
@@ -1694,7 +1765,11 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
         tool_results = await execute_concurrent_tools(tools_to_run, file_path)
-        final_report = await ai.analyze_results(tool_results, previous_context=f"Kategori: {category}")
+        try:
+            final_report = await ai.analyze_results(tool_results, previous_context=f"Kategori: {category}, File: {file_name}")
+        except Exception as e_ai:
+            logger.warning(f"AI analysis gagal ({e_ai}), menggunakan fallback report")
+            final_report = _build_fallback_report(tool_results, file_name, f"File Analysis ({category})")
 
         # Selalu simpan file laporan resmi (.md)
         report_path = f"{file_path}_SOC_Report.md"
