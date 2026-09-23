@@ -1570,7 +1570,13 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     parse_mode="HTML"
                 )
                 stego_tools = ["exiftool", "strings", "binwalk", "zsteg", "steghide"]
-                steg        else:
+                stego_results = await execute_concurrent_tools(stego_tools, file_path)
+                stego_summary = "\n\n<b>[ VPS STEGO EXTRACTION ]</b>\n"
+                for tname, tout in stego_results.items():
+                    stego_summary += f"🔹 <b>{tname}:</b> <code>{html.escape(str(tout)[:200])}</code>\n"
+
+            await status_card.edit_text(vision_report + stego_summary, parse_mode="HTML" if stego_summary else "Markdown")
+        else:
             # Fallback jika AI belum aktif: Jalankan tools stego lokal di VPS
             await status_card.edit_text(
                 "<b>[ RUNNING LOCAL STEGO TOOLS ]</b>\n"
