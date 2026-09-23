@@ -877,70 +877,233 @@ async def scan_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def _build_fallback_report(tool_results: dict, target: str, mode_title: str) -> str:
     """
-    Menyusun laporan terstruktur profesional dari output tools mentah
+    Menyusun CTF writeup report terstruktur dari output tools mentah
     ketika AI tidak tersedia atau semua API key habis kuotanya.
     """
     from datetime import datetime
-    ts = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+    import re
+    ts = datetime.now().strftime("%d %B %Y — %H:%M WIB")
 
     lines = []
-    lines.append(f"# SECURITY SCAN REPORT — {mode_title}")
-    lines.append(f"**Target:** {target}")
-    lines.append(f"**Waktu Analisis:** {ts}")
-    lines.append(f"**Mode:** Structured Report (AI Engine Offline)")
+    lines.append(f"# 📋 CTF / PENTEST WRITEUP REPORT")
+    lines.append(f"")
+    lines.append(f"| Field | Value |")
+    lines.append(f"|-------|-------|")
+    lines.append(f"| **Target** | `{target}` |")
+    lines.append(f"| **Mode Scan** | {mode_title} |")
+    lines.append(f"| **Tanggal** | {ts} |")
+    lines.append(f"| **Engine** | KIIBOT SOC Engine (Structured Mode) |")
+    lines.append(f"| **Status AI** | Offline — Structured Analysis |")
     lines.append("")
     lines.append("---")
-    lines.append("")
-    lines.append("## I. Executive Summary")
-    lines.append("")
-    tools_with_output = [t for t, o in tool_results.items() if o and str(o).strip() and len(str(o).strip()) > 10]
-    lines.append(f"Scan terhadap target `{target}` menggunakan mode **{mode_title}** telah selesai dieksekusi. ")
-    lines.append(f"Total **{len(tools_with_output)}** dari {len(tool_results)} tools menghasilkan output bermakna. ")
-    lines.append("Laporan ini disusun secara otomatis dari output tools tanpa analisis AI karena API key tidak tersedia.")
     lines.append("")
 
     # Deteksi otomatis flag & creds dari raw output
     raw_str = str(tool_results)
-    import re
-    flags = re.findall(r"((?:CTF|FLAG|KIIBOT|picoCTF|HTB|THM)\{[^}]+\})", raw_str, re.IGNORECASE)
+    flags = re.findall(r"((?:CTF|FLAG|KIIBOT|picoCTF|HTB|THM|flag)\{[^}]+\})", raw_str, re.IGNORECASE)
     creds = re.findall(r"(?:password|passwd|pass|pwd|credential)[\s:=]+([\w@!#$%^&*()_+=-]{4,30})", raw_str, re.IGNORECASE)
+    ips = re.findall(r"\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b", raw_str)
+    tools_with_output = [t for t, o in tool_results.items() if o and str(o).strip() and len(str(o).strip()) > 10]
 
+    # ─── OVERVIEW ──────────────────────────────────────────
+    lines.append("## 🎯 Overview & Latar Belakang")
+    lines.append("")
+    lines.append(f"Aktivitas scanning terhadap target **`{target}`** dilakukan menggunakan mode **{mode_title}**. ")
+    lines.append(f"Total **{len(tools_with_output)}** dari {len(tool_results)} tools berhasil menghasilkan output bermakna yang dapat dianalisis lebih lanjut.")
     if flags:
-        lines.append(f"**FLAG DITEMUKAN:** `{'`, `'.join(set(flags))}`")
+        lines.append(f"")
+        lines.append(f"> 🚩 **FLAG TERDETEKSI:** `{'`, `'.join(set(flags))}`")
+    if creds:
+        lines.append(f"")
+        lines.append(f"> 🔑 **POTENSI KREDENSIAL:** `{'`, `'.join(set(list(set(creds))[:5]))}`")
+    lines.append("")
+    lines.append("---")
+    lines.append("")
+
+    # ─── FASE 1: RECON ──────────────────────────────────────
+    recon_tools = ["curl", "whatweb", "wafw00f", "nmap_web", "nmap", "whois", "dig", "nslookup"]
+    recon_results = {t: o for t, o in tool_results.items() if t in recon_tools and o and str(o).strip()}
+
+    if recon_results:
+        lines.append("## 🔍 Fase 1 — Reconnaissance & Fingerprinting")
+        lines.append("")
+        lines.append("Tahap awal ini bertujuan untuk mengidentifikasi teknologi, infrastruktur, dan permukaan serangan target sebelum eksploitasi dimulai.")
+        lines.append("")
+
+        for tool_name, tool_output in recon_results.items():
+            output_str = str(tool_output).strip()
+            if len(output_str) < 5:
+                continue
+
+            tool_descs = {
+                "curl": "Mengambil response HTTP awal untuk melihat header, redirect, dan konten halaman utama.",
+                "whatweb": "Mengidentifikasi teknologi web yang digunakan: framework, CMS, server, dan versi.",
+                "wafw00f": "Mendeteksi keberadaan Web Application Firewall (WAF) yang mungkin memblokir serangan.",
+                "nmap_web": "Melakukan port scan dan script detection untuk menemukan semua layanan web yang aktif.",
+                "nmap": "Network port scan untuk mengidentifikasi port terbuka dan service yang berjalan.",
+                "whois": "Mengambil informasi registrasi domain: pemilik, registrar, tanggal kadaluarsa.",
+                "dig": "DNS lookup untuk memetakan rekaman A, MX, NS, dan TXT domain target.",
+                "nslookup": "Resolusi DNS untuk menemukan IP dan subdomain yang terkait.",
+            }
+            desc = tool_descs.get(tool_name, f"Tool `{tool_name}` digunakan untuk mengumpulkan informasi awal.")
+
+            lines.append(f"### {tool_name.upper()} — Fingerprinting")
+            lines.append(f"{desc}")
+            lines.append("")
+            lines.append("```")
+            lines.append(output_str[:2500] if len(output_str) > 2500 else output_str)
+            if len(output_str) > 2500:
+                lines.append(f"... [TRUNCATED — {len(output_str)} chars total]")
+            lines.append("```")
+            lines.append("")
+            lines.append("> **Analisis:** Perhatikan versi software, header server, atau teknologi yang terekspos. Versi lama atau informasi yang tidak perlu di-expose bisa menjadi vektor serangan.")
+            lines.append("")
+
+        lines.append("---")
+        lines.append("")
+
+    # ─── FASE 2: EXPLOITATION ───────────────────────────────
+    exploit_tools = ["sqlmap", "sqlmap_full", "gobuster", "ffuf", "dirb", "nikto", "hydra_http_get", "hydra_ssh", "nuclei"]
+    exploit_results = {t: o for t, o in tool_results.items() if t in exploit_tools and o and str(o).strip()}
+
+    if exploit_results:
+        lines.append("## 💉 Fase 2 — Vulnerability Discovery & Exploitation")
+        lines.append("")
+        lines.append("Berdasarkan temuan dari fase reconnaissance, tools eksploitasi dijalankan secara paralel untuk menemukan dan memvalidasi kerentanan.")
+        lines.append("")
+
+        tool_descs_exploit = {
+            "sqlmap": "SQLmap dijalankan untuk mendeteksi dan mengeksploitasi kerentanan SQL Injection secara otomatis.",
+            "sqlmap_full": "SQLmap mode FULL dijalankan dengan level dan risk tertinggi untuk dump lengkap database termasuk tabel users dan credentials.",
+            "gobuster": "Gobuster melakukan directory bruteforce untuk menemukan halaman tersembunyi, panel admin, atau backup file.",
+            "ffuf": "ffuf (Fast Fuzzer) digunakan untuk fuzzing endpoint, parameter, atau virtual host yang tidak terdaftar secara publik.",
+            "dirb": "Dirb melakukan directory scan menggunakan wordlist umum untuk menemukan resource tersembunyi.",
+            "nikto": "Nikto melakukan vulnerability scan komprehensif untuk menemukan misconfiguration, header yang lemah, dan celah umum.",
+            "hydra_http_get": "Hydra melakukan login brute-force menggunakan wordlist CTF untuk mendapatkan credential valid.",
+            "hydra_ssh": "Hydra melakukan SSH brute-force untuk mendapatkan akses shell ke server target.",
+            "nuclei": "Nuclei menjalankan template-based scanning untuk mendeteksi CVE dan kerentanan yang sudah diketahui.",
+        }
+
+        for tool_name, tool_output in exploit_results.items():
+            output_str = str(tool_output).strip()
+            if len(output_str) < 5:
+                continue
+
+            desc = tool_descs_exploit.get(tool_name, f"`{tool_name}` dijalankan untuk mengeksploitasi target.")
+            lines.append(f"### {tool_name.upper()} — Exploitation")
+            lines.append(f"{desc}")
+            lines.append("")
+            lines.append("```")
+            lines.append(output_str[:3000] if len(output_str) > 3000 else output_str)
+            if len(output_str) > 3000:
+                lines.append(f"... [TRUNCATED — {len(output_str)} chars total]")
+            lines.append("```")
+            lines.append("")
+
+            # Cek temuan spesifik di output ini
+            tool_flags = re.findall(r"((?:CTF|FLAG|KIIBOT|picoCTF|HTB|THM|flag)\{[^}]+\})", output_str, re.IGNORECASE)
+            tool_creds = re.findall(r"(?:password|passwd|pass|pwd)[\s:=]+([\w@!#$%^&*()_+=-]{4,30})", output_str, re.IGNORECASE)
+            tool_dirs = re.findall(r"((?:Status:\s*200|Found\s*/[\w/.-]+|\[200\].*|/[\w/.-]+\s+\(Status: 200\)))", output_str)
+
+            if tool_flags:
+                lines.append(f"> 🚩 **FLAG DITEMUKAN di output ini:** `{'`, `'.join(set(tool_flags))}`")
+            if tool_creds:
+                lines.append(f"> 🔑 **Credential terdeteksi:** `{'`, `'.join(set(tool_creds[:3]))}`")
+            if tool_dirs and tool_name in ["gobuster", "ffuf", "dirb"]:
+                lines.append(f"> 📂 **{len(tool_dirs)} endpoint/direktori ditemukan** — periksa yang merespons dengan status 200/301.")
+
+            lines.append("> **Analisis:** Tinjau output di atas untuk temuan yang dapat ditindaklanjuti. Fokus pada status code 200, data yang ter-dump, atau credential yang terekspos.")
+            lines.append("")
+
+        lines.append("---")
+        lines.append("")
+
+    # ─── FASE 3: FLAG CAPTURE ───────────────────────────────
+    lines.append("## 🚩 Fase 3 — Flag Capture / Credential Dump")
+    lines.append("")
+    if flags:
+        lines.append("**Flag berhasil ditemukan dalam output scan:**")
+        lines.append("")
+        for f in set(flags):
+            lines.append(f"```")
+            lines.append(f)
+            lines.append(f"```")
         lines.append("")
     if creds:
-        lines.append(f"**POTENSI KREDENSIAL:** `{'`, `'.join(set(list(set(creds))[:5]))}`")
+        lines.append("**Potensi credential yang ditemukan:**")
         lines.append("")
-
+        for c in list(set(creds))[:5]:
+            lines.append(f"- `{c}`")
+        lines.append("")
+    if not flags and not creds:
+        lines.append("Tidak ada flag atau credential yang langsung terdeteksi dari output tools pada sesi scan ini.")
+        lines.append("Diperlukan analisis manual lebih lanjut atau eskalasi serangan untuk mendapatkan flag.")
+    lines.append("")
     lines.append("---")
     lines.append("")
-    lines.append("## II. Temuan Per-Tool (Evidence Capture)")
-    lines.append("")
 
-    for tool_name, tool_output in tool_results.items():
+    # ─── RINGKASAN TEMUAN ───────────────────────────────────
+    lines.append("## 📊 Ringkasan Temuan")
+    lines.append("")
+    lines.append("| # | Tool | Status | Temuan Utama |")
+    lines.append("|---|------|--------|--------------|")
+    for i, (tool_name, tool_output) in enumerate(tool_results.items(), 1):
         output_str = str(tool_output).strip() if tool_output else ""
-        if not output_str or len(output_str) < 5:
-            continue
-
-        lines.append(f"### {tool_name.upper()}")
-        lines.append("")
-        lines.append("```")
-        # Batasi output agar file tidak terlalu besar
-        if len(output_str) > 4000:
-            lines.append(output_str[:4000])
-            lines.append(f"... [TRUNCATED — {len(output_str)} chars total]")
+        if not output_str:
+            status = "❌ No Output"
+            finding = "—"
+        elif "Timeout" in output_str:
+            status = "⏰ Timeout"
+            finding = "Tool melebihi batas waktu eksekusi"
+        elif "error" in output_str.lower() or "Exit 1" in output_str:
+            status = "⚠️ Error"
+            finding = output_str[:80].replace("|", "\\|")
         else:
-            lines.append(output_str)
-        lines.append("```")
-        lines.append("")
+            status = "✅ Output"
+            first_line = output_str.split('\n')[0][:80].replace("|", "\\|")
+            finding = first_line if first_line else "Ada output — lihat detail di atas"
+        lines.append(f"| {i} | `{tool_name}` | {status} | {finding} |")
 
+    lines.append("")
     lines.append("---")
     lines.append("")
-    lines.append("## III. Catatan")
+
+    # ─── LESSONS LEARNED ────────────────────────────────────
+    lines.append("## 🛠️ Lessons Learned & Next Steps")
     lines.append("")
-    lines.append("Laporan ini dihasilkan tanpa AI analysis engine. Untuk mendapatkan laporan SOC lengkap ")
-    lines.append("dengan MITRE ATT&CK mapping, korelasi attack chain, IOC table, dan containment playbook, ")
-    lines.append("perbarui API key Gemini di `configs/ai_keys.json` atau melalui perintah `/aikeys`.")
+    lines.append("Berdasarkan hasil scan di atas, berikut langkah investigasi lanjutan yang disarankan:")
+    lines.append("")
+    if any("sqlmap" in t for t in tool_results):
+        lines.append("```bash")
+        lines.append(f"# Jalankan SQLmap dump database secara manual untuk detail lebih")
+        lines.append(f"sqlmap -u '{target}' --batch --dbs --dump-all --threads=4")
+        lines.append("```")
+    if any(t in tool_results for t in ["gobuster", "ffuf", "dirb"]):
+        lines.append("```bash")
+        lines.append(f"# Scan dengan wordlist lebih besar untuk menemukan endpoint tersembunyi")
+        lines.append(f"gobuster dir -u {target} -w /usr/share/wordlists/dirbuster/directory-list-2.3-medium.txt -t 50 -k")
+        lines.append("```")
+    lines.append("```bash")
+    lines.append(f"# Curl manual untuk inspeksi header dan konten")
+    lines.append(f"curl -v -L '{target}' 2>&1 | head -100")
+    lines.append("```")
+    lines.append("")
+    lines.append("---")
+    lines.append("")
+
+    # ─── MITIGASI ───────────────────────────────────────────
+    lines.append("## 🔐 Rekomendasi Mitigasi (Blue Team Perspective)")
+    lines.append("")
+    lines.append("Berdasarkan mode scan yang dijalankan, berikut langkah-langkah hardening yang direkomendasikan:")
+    lines.append("")
+    lines.append("- **WAF/Rate Limiting:** Pasang WAF (Cloudflare, ModSecurity) dan rate limit untuk semua endpoint.")
+    lines.append("- **Input Validation:** Pastikan semua input pengguna divalidasi dan di-sanitize untuk mencegah SQLi/XSS.")
+    lines.append("- **Error Messages:** Sembunyikan pesan error yang mengekspos versi software atau stack trace.")
+    lines.append("- **Directory Listing:** Nonaktifkan directory listing di semua web server.")
+    lines.append("- **Headers Security:** Tambahkan header: `X-Frame-Options`, `X-Content-Type-Options`, `Content-Security-Policy`.")
+    lines.append("")
+    lines.append("> ⚠️ Laporan ini dihasilkan dalam mode **Structured Analysis** (AI Engine Offline).")
+    lines.append("> Untuk narasi analisis yang lebih mendalam dan kontekstual, tambahkan API key Gemini melalui `/aikeys`.")
     lines.append("")
 
     return "\n".join(lines)

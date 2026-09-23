@@ -334,125 +334,125 @@ Berikan HANYA JSON valid:
         outputs_str = json.dumps(formatted_outputs, indent=2, ensure_ascii=False)[:TOTAL_BUDGET]
 
         system_prompt = (
-            "You are a Tier-3 SOC Incident Responder, Threat Hunter, and DFIR Specialist with expertise in CTF challenges.\n"
-            "Your role is to produce a professional, executive-grade Security Incident Analysis Report.\n\n"
-            "STRICT INTEGRITY RULES:\n"
-            "1. Report ONLY findings that are explicitly present in the tool outputs below. Do NOT fabricate flags, credentials, or IPs.\n"
-            "2. Write in professional Bahasa Indonesia. Avoid excessive emoji — use only where structurally meaningful.\n"
-            "3. Be analytical and narrative, not just a list. Explain what each finding means operationally.\n"
-            "4. Every tool's key output must appear verbatim in the Capture/Evidence section.\n"
-            "5. The report must be immediately usable by a SOC analyst for decision-making."
+            "Kamu adalah seorang CTF Player berpengalaman, Penetration Tester profesional, dan penulis writeup yang handal.\n"
+            "Tugasmu adalah menganalisis output tools security scan dan menyusunnya menjadi CTF Writeup yang PROFESIONAL, "
+            "NARATIF, dan MUDAH DIPAHAMI — bukan sekadar dump output mentah.\n\n"
+            "ATURAN WAJIB:\n"
+            "1. Tulis dalam Bahasa Indonesia yang lugas dan mengalir. Gunakan gaya penulisan writeup CTF sungguhan.\n"
+            "2. Setiap temuan HARUS disertai penjelasan: APA yang ditemukan, MENGAPA itu penting, dan BAGAIMANA cara memanfaatkannya.\n"
+            "3. JANGAN hanya menyalin output tool — analisis, jelaskan, dan narrasikan.\n"
+            "4. Hanya laporkan apa yang BENAR-BENAR ada di output tools. DILARANG mengarang flag, credential, atau IP.\n"
+            "5. Gunakan format Markdown yang bersih dan rapi. Boleh gunakan emoji secukupnya untuk readability.\n"
+            "6. Jadikan laporan ini seolah-olah ditulis oleh seorang CTF player yang sedang bercerita tentang cara mereka menyelesaikan challenge."
         )
 
         user_prompt = f"""Konteks Target / Kasus:
 {previous_context}
 
-Output Eksekusi Tools (Verbatim):
+Output Mentah dari Tools (untuk dianalisis):
 {outputs_str}
 
 ---
 
-Susun laporan dalam format Markdown profesional berikut. Gunakan bahasa yang lugas, naratif, dan taktis.
-Jangan kaku — laporan harus enak dibaca namun tetap teknis dan presisi.
+Sekarang susun laporan ini dalam format CTF WRITEUP profesional berikut. Pastikan setiap bagian berisi penjelasan naratif yang detail — BUKAN sekadar copas output tool.
 
 ---
 
-# SECURITY INCIDENT & THREAT ANALYSIS REPORT
-**Disusun oleh:** KIIBOT SOC Engine  
-**Klasifikasi:** CONFIDENTIAL — Internal Use Only
+# CTF / PENTEST WRITEUP REPORT
+
+**Target:** [isi dari konteks]  
+**Mode Scan:** [isi dari konteks]  
+**Tools Digunakan:** [sebutkan tools yang menghasilkan output bermakna]  
+**Disusun oleh:** KIIBOT AI SOC Engine  
+**Tanggal:** [hari ini]
 
 ---
 
-## I. Executive Summary
+## 🎯 Overview & Latar Belakang
 
-Tulis narasi 3–5 kalimat yang menjelaskan secara ringkas: apa yang diselidiki, apa yang ditemukan,
-dan seberapa kritis temuan tersebut. Hindari poin-poin di bagian ini — tulis seperti laporan eksekutif.
-
-**Severity Level:** [CRITICAL / HIGH / MEDIUM / LOW / INFORMATIONAL]  
-**Attack Category:** [Web Exploitation / Network Forensics / Binary Reversing / Steganography / Recon / Malware]
+Tulis 2–4 paragraf naratif yang menjelaskan:
+- Apa target ini? (teknologi, platform, tujuan)
+- Mengapa target ini menarik untuk dieksplorasi?
+- Apa pendekatan/strategi awal yang digunakan?
 
 ---
 
-## II. Temuan Per-Tool (Evidence Capture)
+## 🔍 Fase 1 — Reconnaissance & Fingerprinting
 
-Untuk setiap tool yang dieksekusi, buat sub-bagian berisi:
-- Narasi singkat apa yang tool lakukan
-- Output kunci yang relevan ditampilkan dalam code block
-- Interpretasi teknis temuan tersebut
+Ceritakan proses awal identifikasi target:
+- Apa yang ditemukan dari fingerprinting? (teknologi, framework, server, versi)
+- Bagaimana informasi ini membentuk strategi serangan?
+- Sertakan output tool yang relevan dalam code block, lalu jelaskan artinya.
 
-Contoh format:
-
-### [Nama Tool]
-[Narasi singkat tujuan tool]
+Format per tool:
+### [Nama Tool] — [Tujuan Tool]
+[Penjelasan singkat mengapa tool ini digunakan]
 
 ```
-[Output verbatim tool yang paling relevan — jangan potong temuan penting]
+[Output kunci dari tool]
 ```
-
-**Interpretasi:** [Apa arti temuan ini? Apa implikasinya?]
-
-Lakukan untuk SEMUA tool yang menghasilkan output bermakna.
+> **Analisis:** [Apa yang kita pelajari dari output ini? Apa implikasinya? Bagaimana ini membantu penyelesaian challenge?]
 
 ---
 
-## III. Korelasi & Attack Chain Analysis
+## 💉 Fase 2 — Vulnerability Discovery & Exploitation
 
-Hubungkan temuan antar-tool secara naratif. Jelaskan bagaimana temuan dari tool A berkaitan
-dengan tool B, dan bagaimana ini membentuk gambaran serangan yang lebih besar atau vektor
-eksploitasi yang dapat digunakan.
+Ini adalah inti writeup. Jelaskan secara naratif:
+- Kerentanan apa yang ditemukan? (SQLi, XSS, IDOR, path traversal, dll)
+- Bagaimana kerentanan itu ditemukan? Jelaskan proses berpikirnya.
+- Bagaimana langkah eksploitasinya step-by-step?
+- Sertakan bukti (output tool/payload) beserta penjelasannya.
 
----
-
-## IV. MITRE ATT&CK Mapping
-
-| Tactic | Technique ID | Technique Name | Keterangan |
-|--------|-------------|----------------|------------|
-| [Tactic] | [T-ID] | [Nama Teknik] | [Korelasi ke temuan] |
+Gunakan format yang sama (tool → output → analisis) untuk setiap temuan penting.
 
 ---
 
-## V. Indicators of Compromise (IOCs)
+## 🚩 Fase 3 — Flag Capture / Credential Dump
 
-| Tipe | Nilai | Keterangan |
-|------|-------|------------|
-| IP Address | — | — |
-| Domain/URL | — | — |
-| Hash (MD5/SHA) | — | — |
-| Flag / Credential | — | — |
+Jika ada flag atau credential ditemukan:
+- Tampilkan flag/credential yang ditemukan
+- Jelaskan dari mana asalnya dan bagaimana cara mendapatkannya
+- Berikan konteks: apa arti flag/credential tersebut dalam konteks challenge?
 
-Isi dengan data nyata dari tool output. Jika tidak ada, tulis "Tidak ditemukan pada analisis ini."
+Jika tidak ada flag: jelaskan informasi sensitif apa yang berhasil diekstrak.
 
 ---
 
-## VI. SOC Containment & Mitigation Playbook
+## 📊 Ringkasan Temuan
 
-Tulis langkah-langkah penanganan yang konkret dan dapat langsung dieksekusi:
+Buat tabel ringkasan semua temuan:
 
-**Immediate Containment:**
-[Tindakan blokir, isolasi, atau shutdown yang perlu dilakukan segera]
-
-**Detection Rules (SIEM/IDS):**
-```
-[Contoh rule Suricata / Sigma / SPL query yang relevan jika ada]
-```
-
-**Remediation & Hardening:**
-[Langkah perbaikan sistem jangka panjang]
+| # | Temuan | Severity | Tool | Keterangan |
+|---|--------|----------|------|------------|
+| 1 | [temuan] | HIGH/MED/LOW | [tool] | [penjelasan singkat] |
 
 ---
 
-## VII. Next Steps — Advanced Investigation Commands
+## 🛠️ Lessons Learned & Next Steps
 
-Berikan perintah Linux CLI nyata dan presisi untuk investigasi lanjutan di VPS:
+- Apa pelajaran teknis utama dari challenge/pentest ini?
+- Teknik apa yang terbukti efektif?
+- Jika ada yang belum terpecahkan, apa langkah lanjutan yang disarankan?
+
+Berikan perintah bash spesifik untuk investigasi lanjutan jika diperlukan:
 
 ```bash
-# [Deskripsi tujuan command]
+# Contoh command lanjutan
 [command]
 ```
 
 ---
 
-Sajikan laporan ini secara lengkap, menyeluruh, dan tajam. Semua temuan dari tools harus masuk."""
+## 🔐 Rekomendasi Mitigasi (Blue Team Perspective)
+
+Jelaskan:
+- Bagaimana kerentanan yang ditemukan bisa dicegah?
+- Konfigurasi atau patch apa yang perlu diterapkan?
+- Rule detection SIEM/IDS yang relevan (jika ada)
+
+---
+
+Ingat: Ini harus DIBACA seperti writeup CTF sungguhan — naratif, mengalir, edukatif, dan menarik untuk dibaca. Bukan laporan korporat yang kaku."""
 
         messages = [
             {"role": "system", "content": system_prompt},
@@ -460,7 +460,7 @@ Sajikan laporan ini secara lengkap, menyeluruh, dan tajam. Semua temuan dari too
         ]
 
         try:
-            return await self.call_chat_completion(messages=messages, temperature=0.25)
+            return await self.call_chat_completion(messages=messages, temperature=0.3)
         except Exception as e:
             logger.error(f"Gagal memanggil AI analyze_results: {e}")
             return f"[ERROR] Terjadi kesalahan saat AI menganalisis hasil: {e!s}"
