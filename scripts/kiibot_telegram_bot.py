@@ -299,7 +299,7 @@ async def report_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
 
         rg = CTFReportGenerator()
-        pdf_path = rg.generate_pdf(sess.id)
+        pdf_path = rg.generate_pdf(sess.id or 1)
         
         await status_msg.edit_text("✅ <b>Laporan PDF berhasil dibuat! Mengirim dokumen...</b>", parse_mode="HTML")
         
@@ -760,7 +760,7 @@ async def reportsoc_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         from kiibot.database.db import get_database
         db = get_database()
         active_session = db.get_active_ctf_session()
-        session_id = active_session.id if active_session else 1
+        session_id = (active_session.id if active_session and active_session.id else 1)
         stats = db.get_ctf_stats(session_id)
     except Exception:
         session_id = 1
@@ -873,20 +873,20 @@ def _build_fallback_report(tool_results: dict, target: str, mode_title: str) -> 
     Menyusun CTF writeup report terstruktur dari output tools mentah
     ketika AI tidak tersedia atau semua API key habis kuotanya.
     """
-    from datetime import datetime
     import re
+    from datetime import datetime
     ts = datetime.now().strftime("%d %B %Y — %H:%M WIB")
 
     lines = []
-    lines.append(f"# 📋 CTF / PENTEST WRITEUP REPORT")
-    lines.append(f"")
-    lines.append(f"| Field | Value |")
-    lines.append(f"|-------|-------|")
+    lines.append("# 📋 CTF / PENTEST WRITEUP REPORT")
+    lines.append("")
+    lines.append("| Field | Value |")
+    lines.append("|-------|-------|")
     lines.append(f"| **Target** | `{target}` |")
     lines.append(f"| **Mode Scan** | {mode_title} |")
     lines.append(f"| **Tanggal** | {ts} |")
-    lines.append(f"| **Engine** | KIIBOT SOC Engine (Structured Mode) |")
-    lines.append(f"| **Status AI** | Offline — Structured Analysis |")
+    lines.append("| **Engine** | KIIBOT SOC Engine (Structured Mode) |")
+    lines.append("| **Status AI** | Offline — Structured Analysis |")
     lines.append("")
     lines.append("---")
     lines.append("")
@@ -904,10 +904,10 @@ def _build_fallback_report(tool_results: dict, target: str, mode_title: str) -> 
     lines.append(f"Aktivitas scanning terhadap target **`{target}`** dilakukan menggunakan mode **{mode_title}**. ")
     lines.append(f"Total **{len(tools_with_output)}** dari {len(tool_results)} tools berhasil menghasilkan output bermakna yang dapat dianalisis lebih lanjut.")
     if flags:
-        lines.append(f"")
+        lines.append("")
         lines.append(f"> 🚩 **FLAG TERDETEKSI:** `{'`, `'.join(set(flags))}`")
     if creds:
-        lines.append(f"")
+        lines.append("")
         lines.append(f"> 🔑 **POTENSI KREDENSIAL:** `{'`, `'.join(set(list(set(creds))[:5]))}`")
     lines.append("")
     lines.append("---")
@@ -1018,9 +1018,9 @@ def _build_fallback_report(tool_results: dict, target: str, mode_title: str) -> 
         lines.append("**Flag berhasil ditemukan dalam output scan:**")
         lines.append("")
         for f in set(flags):
-            lines.append(f"```")
+            lines.append("```")
             lines.append(f)
-            lines.append(f"```")
+            lines.append("```")
         lines.append("")
     if creds:
         lines.append("**Potensi credential yang ditemukan:**")
@@ -1068,16 +1068,16 @@ def _build_fallback_report(tool_results: dict, target: str, mode_title: str) -> 
     lines.append("")
     if any("sqlmap" in t for t in tool_results):
         lines.append("```bash")
-        lines.append(f"# Jalankan SQLmap dump database secara manual untuk detail lebih")
+        lines.append("# Jalankan SQLmap dump database secara manual untuk detail lebih")
         lines.append(f"sqlmap -u '{target}' --batch --dbs --dump-all --threads=4")
         lines.append("```")
     if any(t in tool_results for t in ["gobuster", "ffuf", "dirb"]):
         lines.append("```bash")
-        lines.append(f"# Scan dengan wordlist lebih besar untuk menemukan endpoint tersembunyi")
+        lines.append("# Scan dengan wordlist lebih besar untuk menemukan endpoint tersembunyi")
         lines.append(f"gobuster dir -u {target} -w /usr/share/wordlists/dirbuster/directory-list-2.3-medium.txt -t 50 -k")
         lines.append("```")
     lines.append("```bash")
-    lines.append(f"# Curl manual untuk inspeksi header dan konten")
+    lines.append("# Curl manual untuk inspeksi header dan konten")
     lines.append(f"curl -v -L '{target}' 2>&1 | head -100")
     lines.append("```")
     lines.append("")
@@ -1266,12 +1266,12 @@ async def _run_webattack_mode(update_or_query, context: ContextTypes.DEFAULT_TYP
         ts_now = datetime.now().strftime("%d %B %Y — %H:%M:%S WIB")
         with open(report_file_path, "w", encoding="utf-8") as f:
             f.write("---\n")
-            f.write(f"# SECURITY INCIDENT & THREAT ANALYSIS REPORT\n\n")
-            f.write(f"**Engine:** KIIBOT SOC Automation Engine  \n")
+            f.write("# SECURITY INCIDENT & THREAT ANALYSIS REPORT\n\n")
+            f.write("**Engine:** KIIBOT SOC Automation Engine  \n")
             f.write(f"**Tanggal Analisis:** {ts_now}  \n")
             f.write(f"**Target:** {target_url}  \n")
             f.write(f"**Mode Scan:** {title}  \n")
-            f.write(f"**Klasifikasi:** CONFIDENTIAL — Internal Use Only  \n\n")
+            f.write("**Klasifikasi:** CONFIDENTIAL — Internal Use Only  \n\n")
             f.write("---\n\n")
             f.write(ai_report)
             f.write("\n\n---\n\n")
@@ -1998,11 +1998,12 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 report_path = f"{file_path}_report.md"
                 with open(report_path, "w", encoding="utf-8") as f:
                     f.write(full_reply)
-                await update.message.reply_document(
-                    document=open(report_path, "rb"),
-                    caption=f"📋 <b>Laporan Analisis Log Bertubi-tubi ({html.escape(file_name)})</b>",
-                    parse_mode="HTML"
-                )
+                with open(report_path, "rb") as doc:
+                    await update.message.reply_document(
+                        document=doc,
+                        caption=f"📋 <b>Laporan Analisis Log Bertubi-tubi ({html.escape(file_name)})</b>",
+                        parse_mode="HTML"
+                    )
             else:
                 await update.message.reply_text(full_reply, parse_mode="Markdown")
                 
@@ -2065,11 +2066,12 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 report_path = f"{file_path}_report.md"
                 with open(report_path, "w", encoding="utf-8") as f:
                     f.write(full_reply)
-                await update.message.reply_document(
-                    document=open(report_path, "rb"),
-                    caption=f"📋 <b>Laporan Network Forensic Wireshark ({html.escape(file_name)})</b>",
-                    parse_mode="HTML"
-                )
+                with open(report_path, "rb") as doc:
+                    await update.message.reply_document(
+                        document=doc,
+                        caption=f"📋 <b>Laporan Network Forensic Wireshark ({html.escape(file_name)})</b>",
+                        parse_mode="HTML"
+                    )
             else:
                 await update.message.reply_text(full_reply, parse_mode="Markdown")
                 
@@ -2113,8 +2115,7 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f.write(f"Category: {category}\n\n")
             f.write(final_report)
             f.write("\n\n---\n## RAW TOOLS OUTPUT DUMP\n\n")
-            for tname, tout in tool_results.items():
-                f.write(f"### TOOL: {tname.upper()}\n```\n{tout}\n```\n\n")
+            f.writelines(f"### TOOL: {tname.upper()}\n```\n{tout}\n```\n\n" for tname, tout in tool_results.items())
 
         if len(final_report) > 3800:
             await update.message.reply_text(
