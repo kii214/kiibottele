@@ -425,6 +425,7 @@ TOOL_REGISTRY = {
         "nmap": {
             "cmd": ["nmap", "-sV", "-sC", "--script=default,vuln", "-oN", "/tmp/nmap_scan.txt"],
             "args_append_target": True,
+            "target_type": "host",
             "desc": "Port scanner & service fingerprinting + vulnerability detection scripts. Tool utama recon.",
             "output_limit": 3000,
             "when_to_use": "Soal network yang memberikan alamat IP target yang diizinkan.",
@@ -434,6 +435,7 @@ TOOL_REGISTRY = {
         "nmap_os": {
             "cmd": ["nmap", "-O", "--osscan-guess"],
             "args_append_target": True,
+            "target_type": "host",
             "desc": "Deteksi sistem operasi target menggunakan nmap OS fingerprinting.",
             "output_limit": 2000,
             "timeout": 60.0,
@@ -633,7 +635,7 @@ TOOL_REGISTRY = {
             "sop_step": "SOC-WEB-005: Web Vuln Scan"
         },
         "gobuster": {
-            "cmd": ["gobuster", "dir", "-u", None, "-w", "/usr/share/wordlists/dirb/common.txt",
+            "cmd": ["gobuster", "dir", "-u", None, "-w", "%DIR_WORDLIST%",
                     "-q", "-t", "50", "-k", "--status-codes", "200,301,302,403,500"],
             "args_target_index": 3,
             "desc": "Directory/endpoint brute-forcer cepat (50 threads) untuk menemukan halaman tersembunyi.",
@@ -644,7 +646,7 @@ TOOL_REGISTRY = {
             "sop_step": "SOC-WEB-006: Directory Enumeration"
         },
         "ffuf": {
-            "cmd": ["ffuf", "-u", "%TARGET%/FUZZ", "-w", "/usr/share/wordlists/dirb/common.txt:FUZZ",
+            "cmd": ["ffuf", "-u", "%TARGET%/FUZZ", "-w", "%DIR_WORDLIST%:FUZZ",
                     "-mc", "200,301,302,403", "-c", "-s"],
             "args_template": True,
             "desc": "Fast web fuzzer — support FUZZ placeholder untuk directory, parameter, dan vhost.",
@@ -655,7 +657,7 @@ TOOL_REGISTRY = {
             "sop_step": "SOC-WEB-006: Web Fuzzing"
         },
         "dirb": {
-            "cmd": ["dirb", None, "/usr/share/wordlists/dirb/common.txt", "-S", "-r"],
+            "cmd": ["dirb", None, "%DIR_WORDLIST%", "-S", "-r"],
             "args_target_index": 1,
             "desc": "Directory brute-forcer klasik. Output verbose dengan detail kode HTTP response.",
             "output_limit": 2000,
@@ -690,6 +692,7 @@ TOOL_REGISTRY = {
             "cmd": ["nmap", "-sV", "-p", "80,443,8080,8443,8888,3000,5000,9000",
                     "--script=http-title,http-headers,http-methods,http-robots.txt,http-git"],
             "args_append_target": True,
+            "target_type": "host",
             "desc": "Nmap port scan khusus web: cek port HTTP/HTTPS, dapatkan HTTP title, headers, robots.txt, dan git repo.",
             "output_limit": 2000,
             "timeout": 60.0,

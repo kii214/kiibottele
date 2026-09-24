@@ -22,6 +22,11 @@ logger = logging.getLogger(__name__)
 
 
 class AIOrchestrator:
+    TOOL_CHARS_PER_ITEM = 3000
+    TOTAL_ANALYSIS_CHARS = 14000
+    CLIENT_TIMEOUT_SECONDS = 90
+    CLIENT_MAX_RETRIES = 0
+
     # Class-level state agar index aktif dipertahankan antar request (Singleton State)
     _active_key_index: int = 0
     _exhausted_keys: set = set()
@@ -30,9 +35,6 @@ class AIOrchestrator:
         self.base_url = os.getenv("AI_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai/")
         self.model = os.getenv("AI_MODEL", "gemini-1.5-flash")
         self.api_keys: list[str] = self._load_api_keys()
-        # Reset state agar key yang sebelumnya gagal karena bug auth dicoba ulang
-        AIOrchestrator._active_key_index = 0
-        AIOrchestrator._exhausted_keys.clear()
 
     def _load_api_keys(self) -> list[str]:
         """
@@ -137,7 +139,11 @@ class AIOrchestrator:
             "exhausted_keys_count": exhausted_count,
             "remaining_keys": max(0, total - exhausted_count),
             "model": self.model,
-            "available": self.is_available()
+            "available": self.is_available(),
+            "tool_chars_per_item": self.TOOL_CHARS_PER_ITEM,
+            "total_analysis_chars": self.TOTAL_ANALYSIS_CHARS,
+            "timeout_seconds": self.CLIENT_TIMEOUT_SECONDS,
+            "max_retries": self.CLIENT_MAX_RETRIES,
         }
 
     def _get_client_for_key(self, api_key: str) -> Any | None:
@@ -152,11 +158,26 @@ class AIOrchestrator:
         # untuk key format baru (AQ.xxx).
         return AsyncOpenAI(
             api_key=api_key,
-            base_url=self.base_url
+            base_url=self.base_url,
+            max_retries=self.CLIENT_MAX_RETRIES,
+            timeout=self.CLIENT_TIMEOUT_SECONDS,
         )
+
+    @staticmethod
+    def _status_code(error: Exception) -> int | None:
+        """Ambil HTTP status dari error SDK tanpa bergantung pada subclass tertentu."""
+        status_code = getattr(error, "status_code", None)
+        if isinstance(status_code, int):
+            return status_code
+        response = getattr(error, "response", None)
+        response_status = getattr(response, "status_code", None)
+        return response_status if isinstance(response_status, int) else None
 
     def _is_quota_or_auth_error(self, error: Exception) -> bool:
         """Mendeteksi apakah error disebabkan oleh kuota habis, rate limit, atau token invalid."""
+        status_code = self._status_code(error)
+        if status_code in {401, 403, 429}:
+            return True
         err_str = str(error).lower()
         quota_indicators = [
             "rate_limit", "ratelimit", "429", "insufficient_quota", "quota_exceeded",
@@ -217,7 +238,11 @@ class AIOrchestrator:
 
             except Exception as e:
                 last_error = e
-                logger.error(f"[AI POOL] Error pada API Key #{curr_idx + 1}: {e}")
+                status_code = self._status_code(e)
+                logger.error(
+                    f"[AI POOL] Error pada API Key #{curr_idx + 1}"
+                    f"{f' (HTTP {status_code})' if status_code else ''}: {e}"
+                )
 
                 if self._is_quota_or_auth_error(e):
                     # Tandai key ini habis kuotanya
@@ -230,7 +255,8 @@ class AIOrchestrator:
                     AIOrchestrator._active_key_index = next_idx
                     attempts += 1
                 else:
-                    # Error lain (misal syntax prompt atau server 500), coba key berikutnya juga jika ada
+                    # Error server 5xx biasanya bersifat global; tetap coba key lain
+                    # sekali, tetapi jangan menandai semua key sebagai habis.
                     logger.warning(f"[AI POOL] Percobaan gagal dengan key #{curr_idx + 1}. Mencoba key cadangan...")
                     AIOrchestrator._active_key_index = (curr_idx + 1) % total_keys
                     attempts += 1
@@ -310,11 +336,11 @@ Berikan HANYA JSON valid:
         Membatasi budget karakter per tool secara cerdas agar semua tools terwakili.
         """
         if not self.is_available():
-            return "AI tidak aktif atau kuota semua key telah habis. Periksa log output tools secara manual."
+            raise RuntimeError("AI unavailable: tidak ada API key aktif atau seluruh key sedang gagal")
 
         # Budget karakter per tool ditingkatkan agar capture output lengkap di laporan
-        CHARS_PER_TOOL = 3000
-        TOTAL_BUDGET = 14000
+        CHARS_PER_TOOL = self.TOOL_CHARS_PER_ITEM
+        TOTAL_BUDGET = self.TOTAL_ANALYSIS_CHARS
         formatted_outputs = {}
         for tool_name, output in tool_outputs.items():
             if isinstance(output, str):
@@ -463,7 +489,7 @@ Ingat: Ini harus DIBACA seperti writeup CTF sungguhan — naratif, mengalir, edu
             return await self.call_chat_completion(messages=messages, temperature=0.3)
         except Exception as e:
             logger.error(f"Gagal memanggil AI analyze_results: {e}")
-            return f"[ERROR] Terjadi kesalahan saat AI menganalisis hasil: {e!s}"
+            raise RuntimeError(f"AI analysis unavailable: {e!s}") from e
 
     async def assess_soc_severity(self, alert_context: str) -> str:
         """

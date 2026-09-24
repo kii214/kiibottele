@@ -11,11 +11,36 @@ import logging
 import os
 import shutil
 import time
+from urllib.parse import urlsplit
 
 logger = logging.getLogger(__name__)
 
 # ── Global Tool Availability Cache ──────────────────────────────────────────
 _TOOL_AVAILABILITY_CACHE: dict[str, bool] = {}
+
+_DIRECTORY_WORDLIST_CANDIDATES = (
+    "/usr/share/wordlists/dirb/common.txt",
+    "/usr/share/seclists/Discovery/Web-Content/common.txt",
+    "/usr/share/wordlists/dirbuster/directory-list-2.3-medium.txt",
+    "/usr/share/wordlists/common.txt",
+)
+
+
+def _resolve_target(target: str, target_type: str | None) -> str:
+    """Ubah URL menjadi host hanya untuk tool yang memang membutuhkan host."""
+    if target_type != "host":
+        return target
+    parsed = urlsplit(target if "://" in target else f"//{target}")
+    return parsed.hostname or target.split("/", 1)[0].split(":", 1)[0]
+
+
+def _resolve_wordlist(path: str) -> str | None:
+    """Cari wordlist yang tersedia tanpa mengasumsikan layout distro tertentu."""
+    if os.path.isfile(path):
+        return path
+    if path == "%DIR_WORDLIST%":
+        return next((candidate for candidate in _DIRECTORY_WORDLIST_CANDIDATES if os.path.isfile(candidate)), None)
+    return None
 
 
 def is_tool_available(binary_name: str) -> bool:
@@ -75,6 +100,7 @@ async def run_tool(tool_name: str, tool_config: dict, target: str) -> dict:
     cmd_template = list(tool_config.get("cmd", []))
     output_limit = tool_config.get("output_limit", 2000)
     timeout = float(tool_config.get("timeout", 30.0))
+    resolved_target = _resolve_target(target, tool_config.get("target_type"))
 
     # Cek ketersediaan binary dari cache
     binary = cmd_template[0] if cmd_template else ""
@@ -90,20 +116,33 @@ async def run_tool(tool_name: str, tool_config: dict, target: str) -> dict:
 
     # Bangun command berdasarkan mode
     if tool_config.get("args_append_target", False):
-        cmd = cmd_template + [target]
+        cmd = cmd_template + [resolved_target]
     elif tool_config.get("args_target_index") is not None:
         idx = tool_config["args_target_index"]
         cmd = cmd_template[:]
         if idx < len(cmd):
-            cmd[idx] = target
+            cmd[idx] = resolved_target
         else:
-            cmd.append(target)
+            cmd.append(resolved_target)
     elif tool_config.get("args_template", False):
-        cmd = [part.replace("%TARGET%", target) for part in cmd_template]
+        cmd = [part.replace("%TARGET%", resolved_target) for part in cmd_template]
     else:
         cmd = cmd_template[:]
 
     cmd = [str(c) for c in cmd if c is not None]
+    for index, part in enumerate(cmd):
+        if "%DIR_WORDLIST%" in part:
+            wordlist = _resolve_wordlist("%DIR_WORDLIST%")
+            if not wordlist:
+                return {
+                    tool_name: "[SKIPPED] Directory wordlist tidak ditemukan. "
+                    "Install SecLists/dirb atau konfigurasikan wordlist lokal.",
+                    f"_meta_{tool_name}": {
+                        "available": True, "duration_ms": 0, "returncode": -2,
+                        "status": "skipped", "reason": "wordlist_missing"
+                    }
+                }
+            cmd[index] = part.replace("%DIR_WORDLIST%", wordlist)
     logger.info(f"[EXECUTOR] Menjalankan: {' '.join(cmd)} (timeout={timeout}s)")
     start_time = time.monotonic()
     proc = None

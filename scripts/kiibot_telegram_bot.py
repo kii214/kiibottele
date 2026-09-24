@@ -51,6 +51,11 @@ BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "GANTI_DENGAN_TOKEN_ANDA")
 ALLOWED_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "GANTI_DENGAN_CHAT_ID_ANDA")
 
 
+def _escape_ai_report(report: object) -> str:
+    """Escape hasil AI sebelum digabungkan dengan pesan Telegram berformat HTML."""
+    return html.escape(str(report), quote=False)
+
+
 def check_auth(update: Update) -> bool:
     """Keamanan: Pastikan pesan berasal dari chat ID yang diizinkan (jika diset)."""
     if not update.effective_chat:
@@ -152,55 +157,59 @@ def is_cyber_soc_context(text: str) -> bool:
 # =====================================================================
 
 def get_main_keyboard() -> InlineKeyboardMarkup:
-    """Membuat menu utama interaktif bernomor untuk mode operasi KIIBOT."""
+    """Membuat menu utama yang ringkas untuk mode operasi KIIBOT."""
     keyboard = [
         [
-            InlineKeyboardButton("📂 1. Analisis File CTF", callback_data="menu_file"),
-            InlineKeyboardButton("⚔️ 2. Web Attack CTF", callback_data="menu_webattack"),
+            InlineKeyboardButton("1. Analisis File", callback_data="menu_file"),
+            InlineKeyboardButton("2. Analisis Web", callback_data="menu_webattack"),
         ],
         [
-            InlineKeyboardButton("🔓 3. Decode & Crypto", callback_data="menu_decode"),
-            InlineKeyboardButton("🛡️ 4. SOC Triage & Alert", callback_data="menu_soc"),
+            InlineKeyboardButton("3. Decode & Crypto", callback_data="menu_decode"),
+            InlineKeyboardButton("4. SOC Triage", callback_data="menu_soc"),
         ],
         [
-            InlineKeyboardButton("📝 5. Laporan Word (.docx)", callback_data="gen_report_docx_1"),
-            InlineKeyboardButton("📄 6. Laporan PDF", callback_data="gen_report_pdf_1"),
+            InlineKeyboardButton("5. Laporan Word", callback_data="gen_report_docx_1"),
+            InlineKeyboardButton("6. Laporan PDF", callback_data="gen_report_pdf_1"),
         ],
         [
-            InlineKeyboardButton("🩺 7. VPS Doctor", callback_data="btn_doctor"),
-            InlineKeyboardButton("🔑 8. Status AI Keys", callback_data="btn_aikeys"),
+            InlineKeyboardButton("7. Status VPS", callback_data="btn_doctor"),
+            InlineKeyboardButton("8. Status AI", callback_data="btn_aikeys"),
         ],
         [
-            InlineKeyboardButton("📚 MITRE ATT&CK", callback_data="btn_mitre_list"),
-            InlineKeyboardButton("🛠️ Tools Registry", callback_data="btn_tools"),
+            InlineKeyboardButton("Chat AI", callback_data="btn_ai_chat"),
+            InlineKeyboardButton("AI Limits", callback_data="btn_ai_limits"),
         ],
         [
-            InlineKeyboardButton("💡 Panduan & Command", callback_data="btn_help"),
+            InlineKeyboardButton("MITRE ATT&CK", callback_data="btn_mitre_list"),
+            InlineKeyboardButton("Daftar Tools", callback_data="btn_tools"),
+        ],
+        [
+            InlineKeyboardButton("Panduan & Command", callback_data="btn_help"),
         ]
     ]
     return InlineKeyboardMarkup(keyboard)
 
 
 def get_webattack_keyboard(target_url: str) -> InlineKeyboardMarkup:
-    """Sub-menu pilihan mode Web Attack CTF."""
+    """Sub-menu pilihan mode analisis web."""
     keyboard = [
         [
-            InlineKeyboardButton("🎯 1. Tech Fingerprint", callback_data="wa_fingerprint"),
-            InlineKeyboardButton("💉 2. SQL Injection", callback_data="wa_sqli"),
+            InlineKeyboardButton("1. Tech Fingerprint", callback_data="wa_fingerprint"),
+            InlineKeyboardButton("2. SQL Injection", callback_data="wa_sqli"),
         ],
         [
-            InlineKeyboardButton("📂 3. Dir Enumeration", callback_data="wa_dir"),
-            InlineKeyboardButton("🔐 4. Login Brute-force", callback_data="wa_bruteforce"),
+            InlineKeyboardButton("3. Dir Enumeration", callback_data="wa_dir"),
+            InlineKeyboardButton("4. Login Brute-force", callback_data="wa_bruteforce"),
         ],
         [
-            InlineKeyboardButton("🛡️ 5. Vuln Scanner", callback_data="wa_vulnscan"),
-            InlineKeyboardButton("🌐 6. OSINT Domain", callback_data="wa_osint"),
+            InlineKeyboardButton("5. Vulnerability Scan", callback_data="wa_vulnscan"),
+            InlineKeyboardButton("6. OSINT Domain", callback_data="wa_osint"),
         ],
         [
-            InlineKeyboardButton("🔥 ALL-IN-ONE ATTACK BATTERY", callback_data="wa_all"),
+            InlineKeyboardButton("Jalankan Semua Pemeriksaan", callback_data="wa_all"),
         ],
         [
-            InlineKeyboardButton("🔙 Kembali ke Menu Utama", callback_data="menu_main"),
+            InlineKeyboardButton("Kembali ke Menu Utama", callback_data="menu_main"),
         ]
     ]
     return InlineKeyboardMarkup(keyboard)
@@ -216,20 +225,18 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     welcome_text = (
-        "<b>⚡ KIIBOT CYBER COMMAND CENTER</b>\n"
-        "<code>ENGINE: ACTIVE | SYSTEM: OPTIMAL | VPS: ONLINE</code>\n"
+        "<b>KIIBOT — Security Operations</b>\n"
+        "<code>Engine aktif | VPS online</code>\n"
         "───────────────────────────────\n\n"
-        "Selamat datang, Operator. KIIBOT adalah asisten intelijen cyber ops "
-        "yang dilengkapi <b>40+ Tools Otomatis</b>, <b>AI Vision Inspection</b>, "
-        "serta <b>Engine Laporan SOC Professional</b>.\n\n"
-        "<b>📌 PILIH FITUR OPERASIONAL:</b>\n"
-        "• <b>1. Analisis File CTF</b> — Kirim berkas `.pcap`, `.elf`, `.log`, `.png`, `.zip`\n"
-        "• <b>2. Web Attack CTF</b> — <code>/webattack &lt;url&gt;</code> (SQLi, Dir Enum, Brute, Scan)\n"
+        "Pilih fungsi yang ingin dijalankan. Hasil pemeriksaan akan dikirim langsung ke chat.\n\n"
+        "<b>Fitur utama:</b>\n"
+        "• <b>1. Analisis File</b> — Kirim berkas `.pcap`, `.elf`, `.log`, `.png`, `.zip`\n"
+        "• <b>2. Analisis Web</b> — <code>/webattack &lt;url&gt;</code> (SQLi, enumerasi, scan)\n"
         "• <b>3. Decode & Crypto</b> — <code>/decode &lt;text&gt;</code> (Multi-stage auto-decode)\n"
-        "• <b>4. SOC Triage</b> — <code>/triage</code> (Simulator prioritas alert insiden)\n"
-        "• <b>5. Laporan Word SOC</b> — <code>/reportsoc</code> (Export `.docx` & `.pdf` resmi)\n"
-        "• <b>6. VPS Doctor</b> — <code>/doctor</code> (Diagnosa kelengkapan tools di VPS)\n\n"
-        "<i>💡 Petunjuk: Langsung upload berkas ke chat untuk analisis otomatis!</i>"
+        "• <b>4. SOC Triage</b> — <code>/triage</code> (Prioritas alert insiden)\n"
+        "• <b>5. Laporan</b> — <code>/reportsoc</code> (Export `.docx` dan `.pdf`)\n"
+        "• <b>6. Status VPS</b> — <code>/doctor</code> (Cek ketersediaan tools)\n\n"
+        "<i>Berkas yang dikirim langsung ke chat akan dianalisis otomatis.</i>"
     )
     await update.message.reply_text(
         welcome_text,
@@ -254,6 +261,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "  <code>/doctor</code> : Diagnosa tools VPS (cek yang terinstall vs missing)\n"
         "  <code>/aikeys</code> : Cek status cascading Multi-API Keys Pool\n\n"
         "<b>» Investigasi & Auto-Solve</b>\n"
+        "  <code>/ai [pertanyaan]</code>: Chat dengan AI Cyber/SOC\n"
         "  <code>/mitre [ID]</code>  : Detail teknik MITRE (contoh: <code>/mitre T1140</code>)\n"
         "  <code>/decode [txt]</code>: Analisis instan cipher/hash/JWT/encoding\n"
         "  <code>/analyze [..]</code>: Deep analysis AI expert bertubi-tubi\n\n"
@@ -378,29 +386,31 @@ async def aikeys_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     ai = AIOrchestrator()
     status = ai.get_status_info()
-    total = status["total_keys"]
-    active = status["active_key_index"]
-    exhausted = status["exhausted_keys_count"]
-    model = status["model"]
-    avail = status["available"]
+    await update.message.reply_text(_build_ai_status_text(status), parse_mode="HTML")
 
-    badge = "ACTIVE & READY" if avail else "INACTIVE / QUOTA EXHAUSTED"
 
-    reply = (
+def _build_ai_status_text(status: dict) -> str:
+    """Format status AI lokal tanpa mengklaim quota provider yang tidak tersedia."""
+    badge = "ACTIVE & READY" if status["available"] else "INACTIVE / NO ACTIVE KEY"
+    return (
         "<b>[ AI MULTI-KEY POOL STATUS ]</b>\n"
-        f"<code>STATUS: {badge}</code>\n\n"
-        f"» <b>Model          :</b> {model}\n"
-        f"» <b>Total API Keys :</b> {total} Keys\n"
-        f"» <b>Active Key     :</b> Key #{active}\n"
-        f"» <b>Exhausted Keys :</b> {exhausted} Keys\n"
-        f"» <b>Remaining Keys :</b> {status['remaining_keys']} Keys\n\n"
+        f"<code>STATUS: {badge}</code>\n"
+        f"» <b>Model:</b> <code>{html.escape(str(status['model']))}</code>\n"
+        f"» <b>Keys:</b> {status['remaining_keys']}/{status['total_keys']} tersedia\n"
+        f"» <b>Key aktif:</b> #{status['active_key_index']}\n"
+        f"» <b>Key gagal:</b> {status['exhausted_keys_count']}\n\n"
+        "<b>[ AI SPACE / LIMIT LOKAL ]</b>\n"
+        f"» <b>Input per tool:</b> {status['tool_chars_per_item']:,} karakter\n"
+        f"» <b>Total input analisis:</b> {status['total_analysis_chars']:,} karakter\n"
+        f"» <b>Timeout request:</b> {status['timeout_seconds']} detik\n"
+        f"» <b>Retry SDK:</b> {status['max_retries']} (failover pool tetap aktif)\n\n"
+        "<i>Limit quota/token provider tidak dapat dibaca dari API key. Angka di atas adalah batas lokal KIIBOT.</i>\n\n"
         "<b>[ Cascading Failover Protocol ]</b>\n"
         "- KIIBOT selalu menggunakan Key pertama yang aktif.\n"
         "- Jika Key error (429/insufficient quota), sistem beralih otomatis ke Key berikutnya.\n"
-        "- Maksimal 10 Keys didukung secara paralel.\n\n"
+        "- Error server 500 menggunakan structured fallback report.\n\n"
         "<i>Konfigurasi keys: <code>configs/ai_keys.json</code></i>"
     )
-    await update.message.reply_text(reply, parse_mode="HTML")
 
 
 async def soc_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -736,7 +746,10 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 user_question=f"Analisis teks CTF/SOC ini secara mendalam:\n\n```\n{text}\n```",
                 system_prompt=sys_prompt
             )
-            await status_msg.edit_text(full_reply + decode_section + f"\n{ai_report}", parse_mode="Markdown")
+            await status_msg.edit_text(
+                full_reply + decode_section + f"\n{_escape_ai_report(ai_report)}",
+                parse_mode="HTML"
+            )
         else:
             simple_reply = full_reply
             simple_reply += decode_section or "\n<i>Tidak ada encoding yang dikenali.</i>"
@@ -812,19 +825,19 @@ async def webattack_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if not context.args:
         usage_text = (
-            "⚠️ <b>Format Perintah:</b> <code>/webattack &lt;url_atau_domain&gt;</code>\n\n"
+            "<b>Format Perintah:</b> <code>/webattack &lt;url_atau_domain&gt;</code>\n\n"
             "<b>Contoh:</b>\n"
             "• <code>/webattack http://target.ctf.com</code>\n"
             "• <code>/webattack http://192.168.1.100:8080/login.php</code>\n"
             "• <code>/webattack https://challenge.picoctf.org</code>\n\n"
-            "<b>Setelah URL diset, pilih mode attack:</b>\n"
-            "1️⃣ Tech Fingerprint — Identifikasi teknologi web\n"
-            "2️⃣ SQL Injection    — Cari & dump credentials via SQLi\n"
-            "3️⃣ Dir Enumeration  — Temukan halaman & direktori tersembunyi\n"
-            "4️⃣ Login Brute-force — Coba kombinasi user/pass CTF umum\n"
-            "5️⃣ Vuln Scanner     — Scan kerentanan web umum (Nikto)\n"
-            "6️⃣ OSINT Domain     — Whois, DNS, subdomain recon\n"
-            "🔥 ALL-IN-ONE       — Semua tools sekaligus (paling lengkap)"
+            "<b>Setelah URL diset, pilih mode pemeriksaan:</b>\n"
+            "1. Tech Fingerprint — Identifikasi teknologi web\n"
+            "2. SQL Injection — Uji parameter terhadap SQLi\n"
+            "3. Dir Enumeration — Temukan halaman dan direktori\n"
+            "4. Login Brute-force — Uji kredensial pada target berizin\n"
+            "5. Vulnerability Scan — Pemeriksaan kerentanan umum\n"
+            "6. OSINT Domain — Whois, DNS, dan subdomain\n"
+            "Semua pemeriksaan — Jalankan seluruh pemeriksaan"
         )
         await update.message.reply_text(usage_text, parse_mode="HTML")
         return
@@ -844,17 +857,17 @@ async def webattack_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Tampilkan sub-menu attack
     menu_text = (
-        f"<b>[ WEB ATTACK CTF MODULE ]</b>\n"
+        f"<b>ANALISIS WEB</b>\n"
         f"<code>TARGET: {html.escape(target_url)}</code>\n\n"
-        "<b>Pilih mode attack:</b>\n"
-        "1️⃣ <b>Tech Fingerprint</b> — WhatWeb + WAF detection\n"
-        "2️⃣ <b>SQL Injection</b>    — SQLmap auto-dump credentials\n"
-        "3️⃣ <b>Dir Enumeration</b>  — Gobuster + ffuf + dirb\n"
-        "4️⃣ <b>Login Brute-force</b> — Hydra HTTP/SSH brute-force\n"
-        "5️⃣ <b>Vuln Scanner</b>     — Nikto + Nmap web scripts\n"
-        "6️⃣ <b>OSINT Domain</b>     — Whois + dig + theHarvester\n"
-        "🔥 <b>ALL-IN-ONE</b>       — Full battery (semua tools paralel)\n\n"
-        "<i>⚠️ PERINGATAN: Gunakan HANYA pada target yang Anda miliki izin eksplisit untuk dites (CTF challenge, lab sendiri).</i>"
+        "<b>Pilih mode pemeriksaan:</b>\n"
+        "1. <b>Tech Fingerprint</b> — WhatWeb dan deteksi WAF\n"
+        "2. <b>SQL Injection</b> — Uji parameter dengan SQLmap\n"
+        "3. <b>Dir Enumeration</b> — Gobuster, ffuf, dan dirb\n"
+        "4. <b>Login Brute-force</b> — Hydra untuk HTTP/SSH\n"
+        "5. <b>Vulnerability Scan</b> — Nikto dan Nmap\n"
+        "6. <b>OSINT Domain</b> — Whois, dig, dan theHarvester\n"
+        "<b>Semua Pemeriksaan</b> — Jalankan seluruh pemeriksaan\n\n"
+        "<i>Gunakan hanya pada target yang Anda miliki izin eksplisit untuk diuji.</i>"
     )
     await update.message.reply_text(
         menu_text,
@@ -878,7 +891,7 @@ def _build_fallback_report(tool_results: dict, target: str, mode_title: str) -> 
     ts = datetime.now().strftime("%d %B %Y — %H:%M WIB")
 
     lines = []
-    lines.append("# 📋 CTF / PENTEST WRITEUP REPORT")
+    lines.append("# CTF / PENTEST WRITEUP REPORT")
     lines.append("")
     lines.append("| Field | Value |")
     lines.append("|-------|-------|")
@@ -896,19 +909,33 @@ def _build_fallback_report(tool_results: dict, target: str, mode_title: str) -> 
     flags = re.findall(r"((?:CTF|FLAG|KIIBOT|picoCTF|HTB|THM|flag)\{[^}]+\})", raw_str, re.IGNORECASE)
     creds = re.findall(r"(?:password|passwd|pass|pwd|credential)[\s:=]+([\w@!#$%^&*()_+=-]{4,30})", raw_str, re.IGNORECASE)
     ips = re.findall(r"\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b", raw_str)
-    tools_with_output = [t for t, o in tool_results.items() if o and str(o).strip() and len(str(o).strip()) > 10]
+    def is_failed_output(output: object) -> bool:
+        text = str(output or "").strip().lower()
+        failure_markers = (
+            "[skipped]", "timeout", "[exit ", "tidak ditemukan", "gagal mengeksekusi",
+            "permission denied", "exception:", "no output"
+        )
+        return not text or len(text) <= 10 or any(marker in text for marker in failure_markers)
+
+    successful_tools = [t for t, o in tool_results.items() if not t.startswith("_meta_") and not is_failed_output(o)]
+    failed_tools = [t for t, o in tool_results.items() if not t.startswith("_meta_") and is_failed_output(o)]
 
     # ─── OVERVIEW ──────────────────────────────────────────
-    lines.append("## 🎯 Overview & Latar Belakang")
+    lines.append("## Overview & Latar Belakang")
     lines.append("")
     lines.append(f"Aktivitas scanning terhadap target **`{target}`** dilakukan menggunakan mode **{mode_title}**. ")
-    lines.append(f"Total **{len(tools_with_output)}** dari {len(tool_results)} tools berhasil menghasilkan output bermakna yang dapat dianalisis lebih lanjut.")
+    lines.append(
+        f"Total **{len(successful_tools)}** dari {len(successful_tools) + len(failed_tools)} tools "
+        "menghasilkan output bermakna yang dapat dianalisis lebih lanjut."
+    )
+    if failed_tools:
+        lines.append(f"Sebanyak **{len(failed_tools)}** tool berstatus gagal, timeout, atau dilewati: `{', '.join(failed_tools)}`.")
     if flags:
         lines.append("")
-        lines.append(f"> 🚩 **FLAG TERDETEKSI:** `{'`, `'.join(set(flags))}`")
+        lines.append(f"> **FLAG TERDETEKSI:** `{'`, `'.join(set(flags))}`")
     if creds:
         lines.append("")
-        lines.append(f"> 🔑 **POTENSI KREDENSIAL:** `{'`, `'.join(set(list(set(creds))[:5]))}`")
+        lines.append(f"> **POTENSI KREDENSIAL:** `{'`, `'.join(set(list(set(creds))[:5]))}`")
     lines.append("")
     lines.append("---")
     lines.append("")
@@ -918,7 +945,7 @@ def _build_fallback_report(tool_results: dict, target: str, mode_title: str) -> 
     recon_results = {t: o for t, o in tool_results.items() if t in recon_tools and o and str(o).strip()}
 
     if recon_results:
-        lines.append("## 🔍 Fase 1 — Reconnaissance & Fingerprinting")
+        lines.append("## Fase 1 — Reconnaissance & Fingerprinting")
         lines.append("")
         lines.append("Tahap awal ini bertujuan untuk mengidentifikasi teknologi, infrastruktur, dan permukaan serangan target sebelum eksploitasi dimulai.")
         lines.append("")
@@ -960,7 +987,7 @@ def _build_fallback_report(tool_results: dict, target: str, mode_title: str) -> 
     exploit_results = {t: o for t, o in tool_results.items() if t in exploit_tools and o and str(o).strip()}
 
     if exploit_results:
-        lines.append("## 💉 Fase 2 — Vulnerability Discovery & Exploitation")
+        lines.append("## Fase 2 — Vulnerability Discovery & Exploitation")
         lines.append("")
         lines.append("Berdasarkan temuan dari fase reconnaissance, tools eksploitasi dijalankan secara paralel untuk menemukan dan memvalidasi kerentanan.")
         lines.append("")
@@ -1012,7 +1039,7 @@ def _build_fallback_report(tool_results: dict, target: str, mode_title: str) -> 
         lines.append("")
 
     # ─── FASE 3: FLAG CAPTURE ───────────────────────────────
-    lines.append("## 🚩 Fase 3 — Flag Capture / Credential Dump")
+    lines.append("## Fase 3 — Flag Capture / Credential Dump")
     lines.append("")
     if flags:
         lines.append("**Flag berhasil ditemukan dalam output scan:**")
@@ -1036,7 +1063,7 @@ def _build_fallback_report(tool_results: dict, target: str, mode_title: str) -> 
     lines.append("")
 
     # ─── RINGKASAN TEMUAN ───────────────────────────────────
-    lines.append("## 📊 Ringkasan Temuan")
+    lines.append("## Ringkasan Temuan")
     lines.append("")
     lines.append("| # | Tool | Status | Temuan Utama |")
     lines.append("|---|------|--------|--------------|")
@@ -1062,7 +1089,7 @@ def _build_fallback_report(tool_results: dict, target: str, mode_title: str) -> 
     lines.append("")
 
     # ─── LESSONS LEARNED ────────────────────────────────────
-    lines.append("## 🛠️ Lessons Learned & Next Steps")
+    lines.append("## Lessons Learned & Next Steps")
     lines.append("")
     lines.append("Berdasarkan hasil scan di atas, berikut langkah investigasi lanjutan yang disarankan:")
     lines.append("")
@@ -1085,7 +1112,7 @@ def _build_fallback_report(tool_results: dict, target: str, mode_title: str) -> 
     lines.append("")
 
     # ─── MITIGASI ───────────────────────────────────────────
-    lines.append("## 🔐 Rekomendasi Mitigasi (Blue Team Perspective)")
+    lines.append("## Rekomendasi Mitigasi (Blue Team Perspective)")
     lines.append("")
     lines.append("Berdasarkan mode scan yang dijalankan, berikut langkah-langkah hardening yang direkomendasikan:")
     lines.append("")
@@ -1256,7 +1283,7 @@ async def _run_webattack_mode(update_or_query, context: ContextTypes.DEFAULT_TYP
             unique_creds = list(set(cred_patterns))[:5]
             full_reply += f"🔑 <b>POTENTIAL CREDS: {html.escape(', '.join(unique_creds))}</b>\n\n"
 
-        full_reply += f"\n{ai_report}"
+        full_reply += f"\n{_escape_ai_report(ai_report)}"
 
         # Selalu simpan dan kirimkan file laporan resmi (.md)
         os.makedirs("reports", exist_ok=True)
@@ -1533,28 +1560,26 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
     elif data == "btn_aikeys":
         # aikeys_command butuh update.message — buat pesan via query.message
         ai = AIOrchestrator()
-        status = ai.get_status_info()
-        total = status["total_keys"]
-        active = status["active_key_index"]
-        exhausted = status["exhausted_keys_count"]
-        model = status["model"]
-        avail = status["available"]
-        badge = "ACTIVE & READY" if avail else "INACTIVE / QUOTA EXHAUSTED"
-        reply = (
-            "<b>[ AI MULTI-KEY POOL STATUS ]</b>\n"
-            f"<code>STATUS: {badge}</code>\n\n"
-            f"» <b>Model          :</b> {model}\n"
-            f"» <b>Total API Keys :</b> {total} Keys\n"
-            f"» <b>Active Key     :</b> Key #{active}\n"
-            f"» <b>Exhausted Keys :</b> {exhausted} Keys\n"
-            f"» <b>Remaining Keys :</b> {status['remaining_keys']} Keys\n\n"
-            "<b>[ Cascading Failover Protocol ]</b>\n"
-            "- KIIBOT selalu menggunakan Key pertama yang aktif.\n"
-            "- Jika Key error (429/insufficient quota), sistem beralih otomatis ke Key berikutnya.\n"
-            "- Maksimal 10 Keys didukung secara paralel.\n\n"
-            "<i>Konfigurasi keys: <code>configs/ai_keys.json</code></i>"
+        await query.message.reply_text(
+            _build_ai_status_text(ai.get_status_info()),
+            parse_mode="HTML"
         )
-        await query.message.reply_text(reply, parse_mode="HTML")
+
+    elif data == "btn_ai_chat":
+        await query.message.reply_text(
+            "<b>CHAT AI</b>\n\n"
+            "Kirim pertanyaan langsung atau gunakan:\n"
+            "<code>/ai &lt;pertanyaan keamanan/CTF/SOC&gt;</code>\n\n"
+            "Contoh: <code>/ai jelaskan hasil nmap ini</code>",
+            parse_mode="HTML"
+        )
+
+    elif data == "btn_ai_limits":
+        ai = AIOrchestrator()
+        await query.message.reply_text(
+            _build_ai_status_text(ai.get_status_info()),
+            parse_mode="HTML"
+        )
 
     elif data == "btn_help":
         help_text = (
@@ -1737,8 +1762,22 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
             ai = AIOrchestrator()
             if ai.is_available():
                 await status_msg.edit_text(summary_text + "<i>Menyusun mitigasi SOC taktis dengan AI...</i>", parse_mode="HTML")
-                ai_report = await ai.analyze_results(battery_results, previous_context="Analisis Cuplikan Log Web Serentak")
-                await status_msg.edit_text(f"{summary_text}\n<b>[ AI SOC Mitigation Report ]</b>\n\n{ai_report}", parse_mode="Markdown")
+                try:
+                    ai_report = await ai.analyze_results(
+                        battery_results,
+                        previous_context="Analisis Cuplikan Log Web Serentak"
+                    )
+                except Exception as ai_error:
+                    logger.warning(f"AI log analysis gagal ({ai_error}), menggunakan structured fallback")
+                    ai_report = _build_fallback_report(
+                        battery_results,
+                        text[:120],
+                        "Log Web Serentak"
+                    )
+                await status_msg.edit_text(
+                    f"{summary_text}\n<b>[ AI SOC Mitigation Report ]</b>\n\n{_escape_ai_report(ai_report)}",
+                    parse_mode="HTML"
+                )
             else:
                 await status_msg.edit_text(summary_text, parse_mode="HTML")
             return
@@ -1786,11 +1825,11 @@ async def _handle_ai_chat(update: Update, context: ContextTypes.DEFAULT_TYPE, te
                 system_prompt=sys_prompt
             )
 
-            # Coba kirim dengan Markdown, fallback ke plain text jika gagal
+            # Escape respons AI agar karakter seperti <teks> tidak dianggap tag Telegram.
             try:
                 await typing_msg.edit_text(
-                    f"🤖 <b>KIIBOT</b>\n\n{ai_reply}",
-                    parse_mode="Markdown"
+                    f"<b>KIIBOT</b>\n\n{_escape_ai_report(ai_reply)}",
+                    parse_mode="HTML"
                 )
             except Exception:
                 try:
@@ -1977,10 +2016,18 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
             }
 
             ai = AIOrchestrator()
-            final_report = await ai.analyze_results(
-                aggregated_results,
-                previous_context=f"Analisis Log Serentak: {file_name}. Attacker Suspect: {suspect_ip}, Beaconing: {beacon_count}, Flags: {flags}"
-            )
+            try:
+                final_report = await ai.analyze_results(
+                    aggregated_results,
+                    previous_context=f"Analisis Log Serentak: {file_name}. Attacker Suspect: {suspect_ip}, Beaconing: {beacon_count}, Flags: {flags}"
+                )
+            except Exception as ai_error:
+                logger.warning(f"AI file log analysis gagal ({ai_error}), menggunakan structured fallback")
+                final_report = _build_fallback_report(
+                    aggregated_results,
+                    file_name,
+                    "Log Analysis"
+                )
 
             full_reply = (
                 f"<b>[ LOG ANALYSIS REPORT ]</b>\n"
@@ -1992,7 +2039,7 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if flags:
                 full_reply += f"🚩 <b>FLAG DETECTED:</b> <b>{html.escape(', '.join(flags))}</b>\n\n"
 
-            full_reply += f"\n{final_report}"
+            full_reply += f"\n{_escape_ai_report(final_report)}"
 
             if len(full_reply) > 3800:
                 report_path = f"{file_path}_report.md"
@@ -2005,7 +2052,7 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         parse_mode="HTML"
                     )
             else:
-                await update.message.reply_text(full_reply, parse_mode="Markdown")
+                await update.message.reply_text(full_reply, parse_mode="HTML")
                 
             all_raw = {"Log Battery": battery_results, "VPS Tools": vps_results}
             await _send_raw_results(update, "Log Analysis Results", all_raw, file_path)
@@ -2044,10 +2091,18 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
 
             ai = AIOrchestrator()
-            final_report = await ai.analyze_results(
-                pcap_battery_results,
-                previous_context=f"Analisis PCAP Expert Wireshark: {file_name}. TLS SNI: {tls_count}, SSH: {ssh_count}, Flags: {flags}"
-            )
+            try:
+                final_report = await ai.analyze_results(
+                    pcap_battery_results,
+                    previous_context=f"Analisis PCAP Expert Wireshark: {file_name}. TLS SNI: {tls_count}, SSH: {ssh_count}, Flags: {flags}"
+                )
+            except Exception as ai_error:
+                logger.warning(f"AI PCAP analysis gagal ({ai_error}), menggunakan structured fallback")
+                final_report = _build_fallback_report(
+                    pcap_battery_results,
+                    file_name,
+                    "PCAP Network Forensics"
+                )
 
             full_reply = (
                 f"<b>[ EXPERT WIRESHARK ANALYSIS ]</b>\n"
@@ -2060,7 +2115,7 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if flags:
                 full_reply += f"🚩 <b>FLAG DETECTED :</b> <b>{html.escape(', '.join(flags))}</b>\n\n"
 
-            full_reply += f"\n{final_report}"
+            full_reply += f"\n{_escape_ai_report(final_report)}"
 
             if len(full_reply) > 3800:
                 report_path = f"{file_path}_report.md"
@@ -2073,7 +2128,7 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         parse_mode="HTML"
                     )
             else:
-                await update.message.reply_text(full_reply, parse_mode="Markdown")
+                await update.message.reply_text(full_reply, parse_mode="HTML")
                 
             await _send_raw_results(update, "PCAP Wireshark Results", pcap_battery_results, file_path)
             return
@@ -2128,8 +2183,8 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             await update.message.reply_text(
                 f"<b>[ KIIBOT SOC & CTF INCIDENT REPORT ]</b>\n\n"
-                f"{final_report}",
-                parse_mode="Markdown"
+                f"{_escape_ai_report(final_report)}",
+                parse_mode="HTML"
             )
 
         # Kirim dokumen laporan resmi ke Telegram
@@ -2211,7 +2266,10 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 for tname, tout in stego_results.items():
                     stego_summary += f"🔹 <b>{tname}:</b> <code>{html.escape(str(tout)[:200])}</code>\n"
 
-            await status_card.edit_text(vision_report + stego_summary, parse_mode="HTML" if stego_summary else "Markdown")
+            await status_card.edit_text(
+                _escape_ai_report(vision_report) + stego_summary,
+                parse_mode="HTML"
+            )
         else:
             # Fallback jika AI belum aktif: Jalankan tools stego lokal di VPS
             await status_card.edit_text(
@@ -2283,6 +2341,7 @@ def main():
     app.add_handler(CommandHandler("analyze", analyze_command))
     app.add_handler(CommandHandler("report", report_command))
     app.add_handler(CommandHandler("reportsoc", report_command))
+    app.add_handler(CommandHandler("ai", tanya_command))
     app.add_handler(CommandHandler("tanya", tanya_command))
     app.add_handler(CommandHandler("ask", tanya_command))
     # Web Attack CTF Module
