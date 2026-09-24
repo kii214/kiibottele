@@ -157,34 +157,31 @@ def is_cyber_soc_context(text: str) -> bool:
 # =====================================================================
 
 def get_main_keyboard() -> InlineKeyboardMarkup:
-    """Membuat menu utama yang ringkas untuk mode operasi KIIBOT."""
+    """Membuat menu utama ringkas dengan label yang mudah dipindai."""
     keyboard = [
         [
-            InlineKeyboardButton("1. Analisis File", callback_data="menu_file"),
-            InlineKeyboardButton("2. Analisis Web", callback_data="menu_webattack"),
+            InlineKeyboardButton("Analisis File", callback_data="menu_file"),
+            InlineKeyboardButton("Analisis Web", callback_data="menu_webattack"),
         ],
         [
-            InlineKeyboardButton("3. Decode & Crypto", callback_data="menu_decode"),
-            InlineKeyboardButton("4. SOC Triage", callback_data="menu_soc"),
-        ],
-        [
-            InlineKeyboardButton("5. Laporan Word", callback_data="gen_report_docx_1"),
-            InlineKeyboardButton("6. Laporan PDF", callback_data="gen_report_pdf_1"),
-        ],
-        [
-            InlineKeyboardButton("7. Status VPS", callback_data="btn_doctor"),
-            InlineKeyboardButton("8. Status AI", callback_data="btn_aikeys"),
+            InlineKeyboardButton("Decode & Crypto", callback_data="menu_decode"),
+            InlineKeyboardButton("SOC Triage", callback_data="menu_soc"),
         ],
         [
             InlineKeyboardButton("Chat AI", callback_data="btn_ai_chat"),
             InlineKeyboardButton("AI Limits", callback_data="btn_ai_limits"),
         ],
         [
-            InlineKeyboardButton("MITRE ATT&CK", callback_data="btn_mitre_list"),
+            InlineKeyboardButton("Laporan Word", callback_data="gen_report_docx_1"),
+            InlineKeyboardButton("Laporan PDF", callback_data="gen_report_pdf_1"),
+        ],
+        [
+            InlineKeyboardButton("Status VPS", callback_data="btn_doctor"),
             InlineKeyboardButton("Daftar Tools", callback_data="btn_tools"),
         ],
         [
-            InlineKeyboardButton("Panduan & Command", callback_data="btn_help"),
+            InlineKeyboardButton("MITRE ATT&CK", callback_data="btn_mitre_list"),
+            InlineKeyboardButton("Panduan", callback_data="btn_help"),
         ]
     ]
     return InlineKeyboardMarkup(keyboard)
@@ -225,18 +222,15 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     welcome_text = (
-        "<b>KIIBOT — Security Operations</b>\n"
-        "<code>Engine aktif | VPS online</code>\n"
-        "───────────────────────────────\n\n"
-        "Pilih fungsi yang ingin dijalankan. Hasil pemeriksaan akan dikirim langsung ke chat.\n\n"
-        "<b>Fitur utama:</b>\n"
-        "• <b>1. Analisis File</b> — Kirim berkas `.pcap`, `.elf`, `.log`, `.png`, `.zip`\n"
-        "• <b>2. Analisis Web</b> — <code>/webattack &lt;url&gt;</code> (SQLi, enumerasi, scan)\n"
-        "• <b>3. Decode & Crypto</b> — <code>/decode &lt;text&gt;</code> (Multi-stage auto-decode)\n"
-        "• <b>4. SOC Triage</b> — <code>/triage</code> (Prioritas alert insiden)\n"
-        "• <b>5. Laporan</b> — <code>/reportsoc</code> (Export `.docx` dan `.pdf`)\n"
-        "• <b>6. Status VPS</b> — <code>/doctor</code> (Cek ketersediaan tools)\n\n"
-        "<i>Berkas yang dikirim langsung ke chat akan dianalisis otomatis.</i>"
+        "<b>KIIBOT</b>  <code>Security Operations</code>\n"
+        "<code>Engine aktif  |  VPS online</code>\n\n"
+        "Pilih layanan dari menu di bawah. Untuk analisis berkas, kirim file langsung ke chat.\n\n"
+        "<b>Perintah cepat</b>\n"
+        "<code>/ai</code>      Chat dengan AI Cyber/SOC\n"
+        "<code>/decode</code>  Decode hash, cipher, JWT, dan encoding\n"
+        "<code>/scan</code>    Mulai pemeriksaan web berizin\n"
+        "<code>/doctor</code>  Cek tools Linux yang tersedia\n\n"
+        "<i>Gunakan hanya pada sistem yang Anda miliki atau mendapat izin untuk diuji.</i>"
     )
     await update.message.reply_text(
         welcome_text,
@@ -1389,38 +1383,33 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
 
     elif data == "menu_file":
         await query.message.reply_text(
-            "1️⃣ <b>[ MODE: Analisis File CTF ]</b>\n\n"
-            "Kirimkan file langsung ke chat ini:\n"
-            "» <code>.pcap / .pcapng</code> → Expert Wireshark Battery\n"
-            "» <code>.log / .txt</code>    → Log Forensics Battery\n"
-            "» <code>.png / .jpg</code>    → AI Vision + Stego Tools\n"
-            "» <code>.elf / .bin</code>    → Binary Reversing Tools\n"
-            "» <code>.zip / .tar</code>    → Archive Forensics\n"
-            "» <code>.mem / .dmp</code>    → Memory Forensics (Volatility)\n\n"
-            "<i>Cukup kirim file-nya, bot akan otomatis mendeteksi dan menjalankan tools yang sesuai!</i>",
+            "<b>ANALISIS FILE</b>\n\n"
+            "Kirim file langsung ke chat. Format yang didukung:\n"
+            "<code>.pcap .pcapng</code>  Network forensics\n"
+            "<code>.log .txt</code>      Log analysis\n"
+            "<code>.png .jpg</code>      Steganography dan OCR\n"
+            "<code>.elf .bin</code>      Binary analysis\n"
+            "<code>.zip .tar</code>      Archive forensics\n"
+            "<code>.mem .dmp</code>      Memory forensics\n\n"
+            "<i>Tools akan dipilih otomatis berdasarkan tipe file.</i>",
             parse_mode="HTML"
         )
 
     elif data == "menu_webattack":
         await query.message.reply_text(
-            "2️⃣ <b>[ MODE: Web Attack CTF ]</b>\n\n"
-            "Kirimkan URL atau domain target:\n"
+            "<b>ANALISIS WEB</b>\n\n"
+            "Kirim URL atau domain target:\n"
             "<code>/webattack http://target.ctf.com</code>\n\n"
-            "<b>Kemampuan attack:</b>\n"
-            "💉 SQL Injection (sqlmap) — dump username &amp; password\n"
-            "📂 Dir Enumeration (gobuster/ffuf) — cari halaman tersembunyi\n"
-            "🔐 Login Brute-force (hydra) — coba password CTF umum\n"
-            "🔍 Tech Fingerprint (whatweb) — identifikasi teknologi\n"
-            "🛡️ Vuln Scan (nikto) — cari kerentanan web umum\n"
-            "🌐 OSINT Domain (whois/dig) — info domain &amp; DNS\n"
-            "🔥 ALL-IN-ONE — semua sekaligus!\n\n"
-            "<i>⚠️ Hanya gunakan untuk target yang Anda miliki izin eksplisit (CTF challenge).</i>",
+            "<b>Pemeriksaan tersedia:</b>\n"
+            "SQL Injection, directory enumeration, fingerprint,\n"
+            "vulnerability scan, OSINT, dan pemeriksaan gabungan.\n\n"
+            "<i>Hanya gunakan pada target yang memiliki izin eksplisit.</i>",
             parse_mode="HTML"
         )
 
     elif data == "menu_decode":
         await query.message.reply_text(
-            "3️⃣ <b>[ MODE: Decode &amp; Crypto ]</b>\n\n"
+            "<b>DECODE &amp; CRYPTO</b>\n\n"
             "Gunakan command:\n"
             "» <code>/decode &lt;teks/hash&gt;</code> — Auto-detect &amp; decode\n"
             "» <code>/analyze &lt;payload&gt;</code>  — Deep AI analysis\n\n"
