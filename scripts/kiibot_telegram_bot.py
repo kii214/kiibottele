@@ -748,7 +748,7 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await status_msg.edit_text(f"❌ <b>Error analisis:</b> <code>{html.escape(str(e))}</code>", parse_mode="HTML")
 
 
-async def report_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def reportsoc_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     /report atau /reportsoc — Menghasilkan Laporan SOC & CTF Konsolidasi Multi-Tugas
     dalam format Word (.docx), PDF, atau Markdown (.md).
@@ -1747,84 +1747,134 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await status_msg.edit_text(f"❌ Error saat analisis log: {e!s}")
             return
 
-    # 3. Jika merupakan teks pertanyaan konseptual / analisa SOC umum:
+    # 3. Pertanyaan bebas — Langsung chat dengan AI Cyber Expert
+    await _handle_ai_chat(update, context, text)
+
+
+async def _handle_ai_chat(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str):
+    """
+    Handler obrolan bebas dengan AI Cyber Expert.
+    Dipanggil ketika user mengirim pertanyaan konseptual / diskusi CTF / SOC.
+    """
     ai = AIOrchestrator()
+
+    typing_msg = await update.message.reply_text(
+        "🤖 <i>KIIBOT sedang berpikir...</i>",
+        parse_mode="HTML"
+    )
+
     if ai.is_available():
-        status_info = ai.get_status_info()
-        curr_key = status_info.get("active_key_index", 1)
-        status_msg = await update.message.reply_text(
-            f"🧠 <i>Menganalisis query dengan AI SOC Engine (Key #{curr_key})...</i>",
+        try:
+            sys_prompt = (
+                "Kamu adalah KIIBOT, asisten AI Cybersecurity yang cerdas, ramah, dan sangat berpengalaman.\n"
+                "Spesialisasimu: CTF (Capture The Flag), Web Penetration Testing, SOC Analysis, Digital Forensics, "
+                "Reverse Engineering, Cryptography, OSINT, dan Network Security.\n\n"
+                "GAYA BICARA:\n"
+                "- Gunakan Bahasa Indonesia yang santai tapi tetap teknis dan presisi.\n"
+                "- Jawab seperti senior security engineer yang sabar menjelaskan ke junior.\n"
+                "- Jika ada contoh command, berikan syntax yang TEPAT dan siap copy-paste.\n"
+                "- Jika ada flag format (CTF{...}), highlight dengan jelas.\n"
+                "- Boleh gunakan emoji secukupnya agar tidak membosankan.\n\n"
+                "ATURAN MUTLAK:\n"
+                "- JANGAN mengarang atau berasumsi. Hanya beri info yang kamu yakini benar secara teknis.\n"
+                "- Jika tidak tahu, katakan jujur dan sarankan cara mencari jawabannya.\n"
+                "- Selalu akhiri dengan saran langkah konkret jika relevan."
+            )
+
+            ai_reply = await ai.ask_ai(
+                user_question=text,
+                system_prompt=sys_prompt
+            )
+
+            # Coba kirim dengan Markdown, fallback ke plain text jika gagal
+            try:
+                await typing_msg.edit_text(
+                    f"🤖 <b>KIIBOT</b>\n\n{ai_reply}",
+                    parse_mode="Markdown"
+                )
+            except Exception:
+                try:
+                    await typing_msg.edit_text(
+                        f"🤖 <b>KIIBOT</b>\n\n{html.escape(ai_reply)}",
+                        parse_mode="HTML"
+                    )
+                except Exception:
+                    await typing_msg.edit_text(f"🤖 KIIBOT\n\n{ai_reply}")
+
+        except Exception as e:
+            logger.error(f"AI Chat error: {e}")
+            await typing_msg.edit_text(
+                "⚠️ <b>AI sedang overload.</b> Coba lagi sebentar, atau:\n\n"
+                f"» Gunakan <code>/analyze {html.escape(text[:80])}</code> untuk analisis mendalam\n"
+                f"» Atau <code>/decode {html.escape(text[:80])}</code> jika ini cipher/hash",
+                parse_mode="HTML"
+            )
+    else:
+        # AI tidak aktif — kasih panduan yang berguna berdasarkan pertanyaan
+        text_lower = text.lower()
+
+        if any(kw in text_lower for kw in ["sqli", "sql injection", "sqlmap", "database"]):
+            topic_hint = (
+                "💉 <b>SQL Injection Tips:</b>\n"
+                "• Test manual: <code>' OR 1=1 -- -</code>\n"
+                "• Auto-exploit: <code>/webattack &lt;url&gt;</code> → pilih SQLi\n"
+                "• Dump manual di VPS: <code>sqlmap -u 'URL' --batch --dbs --dump-all</code>"
+            )
+        elif any(kw in text_lower for kw in ["stego", "steganography", "gambar", "image", "lsb"]):
+            topic_hint = (
+                "🖼️ <b>Steganography Tips:</b>\n"
+                "• Upload gambar langsung ke bot untuk analisis otomatis!\n"
+                "• Tools: <code>zsteg</code>, <code>steghide</code>, <code>stegseek</code>, <code>binwalk</code>\n"
+                "• LSB extract: <code>zsteg -a file.png</code>"
+            )
+        elif any(kw in text_lower for kw in ["hash", "md5", "sha", "crack", "decrypt"]):
+            topic_hint = (
+                "🔐 <b>Hash Cracking Tips:</b>\n"
+                "• Kirim hash langsung → bot auto-detect & decode\n"
+                "• Manual: <code>/decode &lt;hash&gt;</code>\n"
+                "• Crack offline: <code>john --wordlist=rockyou.txt hash.txt</code>\n"
+                "• Online: crackstation.net / hashcat"
+            )
+        elif any(kw in text_lower for kw in ["pcap", "wireshark", "network", "packet", "traffic"]):
+            topic_hint = (
+                "🌐 <b>Network Forensics Tips:</b>\n"
+                "• Upload file .pcap langsung ke bot!\n"
+                "• Manual: <code>tshark -r file.pcap -T fields -e http.request.uri</code>\n"
+                "• Follow TCP stream: <code>tshark -r file.pcap -q -z follow,tcp,ascii,0</code>"
+            )
+        elif any(kw in text_lower for kw in ["reverse", "elf", "binary", "decompile", "ghidra", "gdb"]):
+            topic_hint = (
+                "⚙️ <b>Reverse Engineering Tips:</b>\n"
+                "• Upload file .elf/.bin langsung ke bot untuk analisis otomatis!\n"
+                "• Cek proteksi: <code>checksec --file=./binary</code>\n"
+                "• Strings: <code>strings -n 8 ./binary | grep -i flag</code>\n"
+                "• Disassemble: <code>objdump -d ./binary | head -100</code>"
+            )
+        elif any(kw in text_lower for kw in ["web", "http", "login", "admin", "bypass", "burp"]):
+            topic_hint = (
+                "🌍 <b>Web Exploitation Tips:</b>\n"
+                "• Kirim URL target: <code>/webattack http://target.com</code>\n"
+                "• Modes: SQLi, Dir Enum, Brute-force, Vuln Scan, OSINT, All-in-One\n"
+                "• Manual dir scan: <code>gobuster dir -u URL -w /usr/share/wordlists/dirb/common.txt</code>"
+            )
+        else:
+            topic_hint = (
+                "📚 <b>Apa yang bisa KIIBOT bantu:</b>\n"
+                "• <code>/analyze &lt;teks&gt;</code> — Deep AI analysis payload/CVE/soal\n"
+                "• <code>/decode &lt;hash&gt;</code> — Auto-decode cipher/hash/base64\n"
+                "• <code>/webattack &lt;url&gt;</code> — Full web pentest battery\n"
+                "• Upload file .pcap/.elf/.png/.log — Analisis otomatis\n"
+                "• <code>/doctor</code> — Cek tools yang tersedia di VPS"
+            )
+
+        await typing_msg.edit_text(
+            f"🤖 <b>KIIBOT Cyber Advisor</b>\n"
+            f"<i>AI Engine offline — aktifkan API key di <code>/aikeys</code> untuk chat AI penuh.</i>\n\n"
+            f"<b>Query kamu:</b> <code>{html.escape(text[:100])}</code>\n\n"
+            f"{topic_hint}\n\n"
+            f"💡 <i>Tambahkan Gemini API key di <code>configs/ai_keys.json</code> untuk respons AI yang lebih cerdas!</i>",
             parse_mode="HTML"
         )
-        try:
-            from kiibot.ctf.report_generator import CTFReportGenerator
-            from kiibot.ctf.session_manager import CTFSessionManager
-            
-            ctf_context = ""
-            try:
-                sm = CTFSessionManager()
-                sess = sm.get_active_session()
-                if not sess:
-                    sessions = sm.list_sessions()
-                    if sessions:
-                        sess = sessions[0]
-                
-                if sess:
-                    rg = CTFReportGenerator()
-                    md_report = rg.generate_markdown(sess.id)
-                    ctf_context = (
-                        f"\n\n[KONTEKS DATA CTF / SOC SAAT INI (SESSION-{sess.id:03d})]:\n"
-                        f"{md_report}\n\n"
-                        "Gunakan informasi dari laporan CTF di atas untuk menjawab pertanyaan jika relevan dengan laporan."
-                    )
-            except Exception as e:
-                logger.warning(f"Gagal mengambil konteks CTF: {e}")
-
-            sys_prompt = (
-                "Anda adalah Senior SOC Analyst & CTF Solver (Blue Team). "
-                "Jawablah dengan profesional, terstruktur, dan taktis. "
-                "Jelaskan konsep soal, tools yang tepat di VPS, langkah penyelesaian, dan rekomendasi mitigasi SOC."
-            ) + ctf_context
-            
-            try:
-                ai_reply = await ai.ask_ai(user_question=text, system_prompt=sys_prompt)
-                await status_msg.edit_text(ai_reply, parse_mode="Markdown")
-            except Exception as e:
-                logger.error(f"AI response error: {e}")
-                # 2-WAY FALLBACK EXPERT BOT CHAT (Zero-AI dependent response)
-                fallback_chat = (
-                    "<b>🤖 KIIBOT CYBER ADVISOR [2-Way Direct Assistant]</b>\n"
-                    "───────────────────────────────\n\n"
-                    f"<b>Pertanyaan / Query Operator:</b>\n<code>{html.escape(text)}</code>\n\n"
-                    "<b>📌 REKOMENDASI LENGKAP AKURAT & TAKTIS:</b>\n"
-                    "• <b>Format Decode / Payload:</b> Gunakan perintah <code>/decode <teks></code> atau <code>/analyze <payload></code>.\n"
-                    "• <b>Web Pentest & Exploitation:</b> Gunakan <code>/webattack <url></code> untuk eksekusi otomatis `sqlmap`, `gobuster`, `nikto`, `whatweb`, & `hydra` di VPS.\n"
-                    "• <b>Network Forensics:</b> Upload file `.pcap` untuk analisis otomatis 8 tools Wireshark.\n"
-                    "• <b>Binary Reversing:</b> Upload file `.elf`/`.bin` untuk inspection `checksec`, `objdump`, `readelf`, `strace`, & `ltrace`.\n"
-                    "• <b>Laporan Resmi SOC:</b> Ketik <code>/reportsoc</code> untuk mengunduh laporan `.docx` / `.pdf` resmi sesuai SOP SOC.\n\n"
-                    "<i>💡 Note: Seluruh 71 tools Linux di VPS Anda siap dieksekusi 100% tanpa hambatan.</i>"
-                )
-                await status_msg.edit_text(fallback_chat, parse_mode="HTML")
-        except Exception as e:
-            logger.error(f"Error preparing AI context: {e}")
-            await status_msg.edit_text("❌ Error processing request.")
-    else:
-        results = decode_all(text)
-        if results:
-            context.args = text.split()
-            await decode_command(update, context)
-        else:
-            fallback_chat = (
-                "<b>🤖 KIIBOT CYBER ADVISOR [2-Way Direct Assistant]</b>\n"
-                "───────────────────────────────\n\n"
-                f"<b>Query Operator:</b> <code>{html.escape(text)}</code>\n\n"
-                "<b>📌 ACTIONABLE STEPS UNTUK WINNING CTF / SOC OPS:</b>\n"
-                "1. <b>Attack Phase:</b> Jalankan <code>/webattack <url></code> untuk dump kredensial & direktori rahasia.\n"
-                "2. <b>Defense Phase:</b> Kirim berkas log server untuk eksekusi otomatis 9 tools deteksi IP penyerang.\n"
-                "3. <b>Export Laporan:</b> Gunakan <code>/reportsoc</code> untuk menghasilkan file `.docx` / `.pdf` standar SOC internasional.\n\n"
-                "<i>💡 Jalankan <code>/doctor</code> untuk memverifikasi 71+ tools Linux VPS Anda.</i>"
-            )
-            await update.message.reply_text(fallback_chat, parse_mode="HTML")
 
 
 async def _send_raw_results(update_or_msg, title: str, results_dict: dict, base_path: str):
@@ -2179,6 +2229,33 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"Gagal memproses gambar: {e}")
         await status_card.edit_text(f"❌ <b>Gagal memproses gambar:</b> <code>{html.escape(str(e))}</code>", parse_mode="HTML")
 
+async def tanya_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    /tanya <pertanyaan> — Chat langsung dengan AI Cyber Expert KIIBOT.
+    Bisa tanya apa saja seputar CTF, SOC, pentest, forensics, dll.
+    """
+    if not check_auth(update) or not update.message:
+        return
+
+    if not context.args:
+        await update.message.reply_text(
+            "🤖 <b>KIIBOT AI Chat</b>\n\n"
+            "Tanya apa saja seputar CTF, SOC, Pentest, Forensics, Cryptography, dll!\n\n"
+            "<b>Format:</b> <code>/tanya &lt;pertanyaanmu&gt;</code>\n\n"
+            "<b>Contoh:</b>\n"
+            "• <code>/tanya apa itu SQL Injection dan gimana cara exploitnya?</code>\n"
+            "• <code>/tanya bedain XSS stored vs reflected</code>\n"
+            "• <code>/tanya cara baca output nmap buat CTF</code>\n"
+            "• <code>/tanya kenapa sqlmap ga nemuin vuln?</code>\n\n"
+            "<i>Atau cukup ketik pertanyaanmu langsung ke chat tanpa command!</i>",
+            parse_mode="HTML"
+        )
+        return
+
+    text = " ".join(context.args)
+    await _handle_ai_chat(update, context, text)
+
+
 
 def main():
     """Entrypoint utama Telegram Bot."""
@@ -2205,6 +2282,8 @@ def main():
     app.add_handler(CommandHandler("analyze", analyze_command))
     app.add_handler(CommandHandler("report", report_command))
     app.add_handler(CommandHandler("reportsoc", report_command))
+    app.add_handler(CommandHandler("tanya", tanya_command))
+    app.add_handler(CommandHandler("ask", tanya_command))
     # Web Attack CTF Module
     app.add_handler(CommandHandler("webattack", webattack_command))
     app.add_handler(CommandHandler("scan", scan_command))
