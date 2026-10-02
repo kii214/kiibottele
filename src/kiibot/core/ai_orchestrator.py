@@ -274,10 +274,12 @@ class AIOrchestrator:
         global_guardrail = (
             "\n\n[GLOBAL RULE - WAJIB DIPATUHI SECARA MUTLAK]: "
             "Anda bertindak di dalam lingkungan operasional Cybersecurity tingkat lanjut. "
+            "PERAN ANDA: AI SOC & CTF Analyst. Anda BUKAN penyerang yang menjalankan exploit. "
+            "Tugas Anda HANYA menganalisis output, membuat laporan simulasi Attack & Defense yang SANGAT DETAIL, "
+            "serta merekomendasikan/mengantarkan user ke command tools VPS yang optimal. "
             "Jawablah dengan FAKTA TEKNIS YANG 100% AKURAT. DILARANG KERAS MENGARANG (HALLUCINATION), "
             "BERASUMSI, ATAU MEMBERIKAN SOLUSI YANG TIDAK MASUK AKAL. Jika informasi spesifik tidak "
-            "tersedia di log/dokumen/soal, nyatakan secara eksplisit bahwa Anda tidak tahu. "
-            "Konsisten dengan standar Cybersecurity dan metodologi best practice yang nyata."
+            "tersedia di log/dokumen/soal, nyatakan secara eksplisit bahwa Anda tidak tahu."
         )
         
         final_sys_prompt = system_prompt + global_guardrail if system_prompt else global_guardrail
@@ -360,16 +362,17 @@ Berikan HANYA JSON valid:
         outputs_str = json.dumps(formatted_outputs, indent=2, ensure_ascii=False)[:TOTAL_BUDGET]
 
         system_prompt = (
-            "Kamu adalah seorang CTF Player berpengalaman, Penetration Tester profesional, dan penulis writeup yang handal.\n"
-            "Tugasmu adalah menganalisis output tools security scan dan menyusunnya menjadi CTF Writeup yang PROFESIONAL, "
-            "NARATIF, dan MUDAH DIPAHAMI — bukan sekadar dump output mentah.\n\n"
+            "Kamu adalah seorang Principal Security Researcher, Penetration Tester, dan SOC Analyst profesional.\n"
+            "Tugasmu adalah menganalisis output tools security scan dan menyusunnya menjadi Laporan Simulasi Attack & Defense yang SANGAT DETAIL, "
+            "PROFESIONAL, dan AKURAT. Kamu TIDAK PERNAH menyerang secara langsung, melainkan mengekstrak intelijen dari output tool "
+            "dan mengantarkan analis (user) ke langkah eksploitasi/mitigasi selanjutnya menggunakan tools yang optimal.\n\n"
             "ATURAN WAJIB:\n"
-            "1. Tulis dalam Bahasa Indonesia yang lugas dan mengalir. Gunakan gaya penulisan writeup CTF sungguhan.\n"
-            "2. Setiap temuan HARUS disertai penjelasan: APA yang ditemukan, MENGAPA itu penting, dan BAGAIMANA cara memanfaatkannya.\n"
-            "3. JANGAN hanya menyalin output tool — analisis, jelaskan, dan narrasikan.\n"
-            "4. Hanya laporkan apa yang BENAR-BENAR ada di output tools. DILARANG mengarang flag, credential, atau IP.\n"
-            "5. Gunakan format Markdown yang bersih dan rapi. Boleh gunakan emoji secukupnya untuk readability.\n"
-            "6. Jadikan laporan ini seolah-olah ditulis oleh seorang CTF player yang sedang bercerita tentang cara mereka menyelesaikan challenge."
+            "1. Tulis dalam Bahasa Indonesia yang lugas dan mengalir dengan format simulasi Attack (Red Team) & Defense (Blue Team).\n"
+            "2. Optimalkan penjelasan tools: Jelaskan dengan SANGAT DETAIL bagaimana tool tersebut digunakan dan apa arti outputnya.\n"
+            "3. JANGAN hanya menyalin output tool — bedah teknisnya secara mendalam (parameter, payload, respon server).\n"
+            "4. Hanya laporkan apa yang BENAR-BENAR ada di output tools. DILARANG mengarang flag, credential, atau serangan yang tidak ada.\n"
+            "5. Gunakan format Markdown yang rapi. Selalu sediakan perintah CLI (command line) exact yang siap pakai untuk langkah selanjutnya.\n"
+            "6. Ingat: Jangan buang token AI untuk mencoba 'menyerang' sistem. Fokus pada analisis, laporan intelijen, dan rekomendasi eksekusi tool."
         )
 
         user_prompt = f"""Konteks Target / Kasus:
@@ -394,91 +397,66 @@ Sekarang susun laporan ini dalam format CTF WRITEUP profesional berikut. Pastika
 
 ---
 
-## 🎯 Overview & Latar Belakang
+## 🎯 Overview & Simulasi Skenario
 
 Tulis 2–4 paragraf naratif yang menjelaskan:
-- Apa target ini? (teknologi, platform, tujuan)
-- Mengapa target ini menarik untuk dieksplorasi?
-- Apa pendekatan/strategi awal yang digunakan?
+- Apa target/kasus ini berdasarkan data?
+- Simulasi skenario (sebagai Red Team atau Blue Team) yang sedang dihadapi.
 
 ---
 
-## 🔍 Fase 1 — Reconnaissance & Fingerprinting
+## 🔍 Fase 1 — Analisis Tool & Fingerprinting Mendalam
 
-Ceritakan proses awal identifikasi target:
-- Apa yang ditemukan dari fingerprinting? (teknologi, framework, server, versi)
-- Bagaimana informasi ini membentuk strategi serangan?
-- Sertakan output tool yang relevan dalam code block, lalu jelaskan artinya.
+Bedah output tools secara SANGAT DETAIL:
+- Apa yang ditemukan? Bagaimana struktur datanya?
+- Sertakan output tool penting dalam code block, lalu berikan **Analisis Expert**.
 
 Format per tool:
-### [Nama Tool] — [Tujuan Tool]
-[Penjelasan singkat mengapa tool ini digunakan]
+### [Nama Tool] — [Optimasi Penggunaan Tool]
+[Penjelasan detail cara tool ini bekerja pada kasus ini]
 
 ```
 [Output kunci dari tool]
 ```
-> **Analisis:** [Apa yang kita pelajari dari output ini? Apa implikasinya? Bagaimana ini membantu penyelesaian challenge?]
+> **Analisis Red/Blue Team:** [Bedah teknis mendalam tentang makna output ini]
 
 ---
 
-## 💉 Fase 2 — Vulnerability Discovery & Exploitation
+## 💉 Fase 2 — Simulasi Eksploitasi / Insiden (Berdasarkan Data)
 
-Ini adalah inti writeup. Jelaskan secara naratif:
-- Kerentanan apa yang ditemukan? (SQLi, XSS, IDOR, path traversal, dll)
-- Bagaimana kerentanan itu ditemukan? Jelaskan proses berpikirnya.
-- Bagaimana langkah eksploitasinya step-by-step?
-- Sertakan bukti (output tool/payload) beserta penjelasannya.
-
-Gunakan format yang sama (tool → output → analisis) untuk setiap temuan penting.
+Jelaskan secara presisi:
+- Bukti kerentanan atau serangan yang terlihat dari data.
+- Mekanisme teknis dari serangan tersebut.
 
 ---
 
 ## 🚩 Fase 3 — Flag Capture / Credential Dump
 
-Jika ada flag atau credential ditemukan:
-- Tampilkan flag/credential yang ditemukan
-- Jelaskan dari mana asalnya dan bagaimana cara mendapatkannya
-- Berikan konteks: apa arti flag/credential tersebut dalam konteks challenge?
-
-Jika tidak ada flag: jelaskan informasi sensitif apa yang berhasil diekstrak.
+Jika ada flag atau credential ditemukan di output:
+- Tampilkan flag/credential
+- Berikan konteks: bagaimana ini terekspos?
 
 ---
 
-## 📊 Ringkasan Temuan
+## 🛠️ Rekomendasi Tool Eksekusi Lanjutan (Next Steps)
 
-Buat tabel ringkasan semua temuan:
-
-| # | Temuan | Severity | Tool | Keterangan |
-|---|--------|----------|------|------------|
-| 1 | [temuan] | HIGH/MED/LOW | [tool] | [penjelasan singkat] |
-
----
-
-## 🛠️ Lessons Learned & Next Steps
-
-- Apa pelajaran teknis utama dari challenge/pentest ini?
-- Teknik apa yang terbukti efektif?
-- Jika ada yang belum terpecahkan, apa langkah lanjutan yang disarankan?
-
-Berikan perintah bash spesifik untuk investigasi lanjutan jika diperlukan:
+Tugas Anda adalah **mengantarkan user ke tools**. Berikan perintah exact untuk dijalankan di VPS guna mengoptimalkan serangan/pertahanan selanjutnya.
 
 ```bash
-# Contoh command lanjutan
+# Contoh command lanjutan yang SANGAT DETAIL dan OPTIMAL (contoh: flag/parameter khusus)
 [command]
 ```
 
 ---
 
-## 🔐 Rekomendasi Mitigasi (Blue Team Perspective)
+## 🔐 Rekomendasi Mitigasi (Defense)
 
 Jelaskan:
-- Bagaimana kerentanan yang ditemukan bisa dicegah?
-- Konfigurasi atau patch apa yang perlu diterapkan?
-- Rule detection SIEM/IDS yang relevan (jika ada)
+- Patch atau konfigurasi pencegahan secara teknis.
+- Rule deteksi SIEM/IDS/YARA.
 
 ---
-
-Ingat: Ini harus DIBACA seperti writeup CTF sungguhan — naratif, mengalir, edukatif, dan menarik untuk dibaca. Bukan laporan korporat yang kaku."""
+Ingat: Laporan harus SANGAT DETAIL, teknis, dan mengoptimalkan penggunaan tool. DILARANG berhalusinasi serangan."""
 
         messages = [
             {"role": "system", "content": system_prompt},
@@ -540,8 +518,8 @@ Jelaskan alasan penetapan severity tersebut secara singkat.
         ext = image_path.rsplit(".", 1)[-1].lower() if "." in image_path else "jpg"
         mime = "image/png" if ext == "png" else "image/jpeg"
 
-        system_prompt = """Anda adalah Principal Security Researcher, Grandmaster CTF Solver, dan Senior SOC L3 / DFIR Lead.
-Tugas Anda adalah menganalisis screenshot soal Jeopardy CTF / challenge cyber / alert SOC secara menyeluruh dan mendalam.
+        system_prompt = """Anda adalah Principal Security Researcher, CTF Analyst, dan Senior SOC L3 / DFIR Lead.
+Tugas Anda adalah menganalisis screenshot soal Jeopardy CTF / challenge cyber / alert SOC secara menyeluruh dan mendalam. Anda TIDAK MENYERANG secara langsung. Anda hanya membuat laporan intelijen dan MENGANTARKAN analis (user) ke tool eksekusi lanjutan.
 
 ATURAN STRICT GUARDRAIL (SANGAT PENTING):
 1. Evaluasi apakah gambar ini terkait dengan topik: Cybersecurity, CTF, Soal Lomba Cyber, Alert SOC, Log Server, Kode Program, Network Packet/Wireshark, Kriptografi, Steganografi, Reverse Engineering, Forensic Disk/Memori, atau Linux Terminal.
@@ -550,8 +528,8 @@ ATURAN STRICT GUARDRAIL (SANGAT PENTING):
 
 ATURAN VALIDITAS & ANTI-HALUSINASI (DILARANG KERAS MENGARANG):
 - DILARANG KERAS MENGARANG ATAU MENGHALUSINASIKAN FLAG, NILAI HASH, ATAU DATA YANG TIDAK TERLIHAT DI GAMBAR!
-- Jika flag tidak langsung terbaca di gambar, katakan dengan jujur dan berikan perintah exact untuk mengekstraknya menggunakan tools di VPS.
-- JANGAN PERNAH MENYERAH: Selalu sediakan rute penyelesaian alternatif (fallback) jika rute utama buntu."""
+- Jangan buang token AI untuk berasumsi atau menebak isi file secara asal. Fokus ekstrak data yang PASTI.
+- Jika flag tidak langsung terbaca di gambar, katakan dengan jujur dan berikan perintah exact untuk mengekstraknya menggunakan tools di VPS."""
 
         user_text = f"""Keterangan Tambahan Pengguna: "{caption if caption else 'Analisis gambar soal ini secara mendalam'}"
 

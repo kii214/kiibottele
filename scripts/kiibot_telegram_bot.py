@@ -153,6 +153,104 @@ def is_cyber_soc_context(text: str) -> bool:
 
 
 # =====================================================================
+# FLAG EXTRACTION & NATIVE ANALYSIS HELPERS
+# =====================================================================
+
+FLAG_REGEX_UNIVERSAL = re.compile(
+    r"[A-Za-z0-9_]{2,25}\{[A-Za-z0-9_\-+=!?@#$%^&*.,:;~]{3,128}\}"
+)
+
+
+def _extract_flags_from_all_sources(tool_outputs: dict) -> list[str]:
+    """
+    Ekstrak semua flag dari output semua tools yang dijalankan.
+    Mencari pola flag universal di setiap output string/dict.
+    """
+    flags_found: set[str] = set()
+    for key, val in tool_outputs.items():
+        if key.startswith("_meta_"):
+            continue
+        text = ""
+        if isinstance(val, str):
+            text = val
+        elif isinstance(val, (dict, list)):
+            import json as _json
+            try:
+                text = _json.dumps(val)
+            except Exception:
+                text = str(val)
+        else:
+            text = str(val)
+        for m in FLAG_REGEX_UNIVERSAL.finditer(text):
+            flags_found.add(m.group(0))
+    return sorted(flags_found)
+
+
+def _format_native_analysis_card(report) -> str:
+    """
+    Format hasil native analyze_file() menjadi kartu HTML ringkas untuk Telegram.
+    Menampilkan: tipe file, kategori CTF, checksec, entropy, flags, strings penting.
+    """
+    lines = []
+    lines.append(f"<b>📁 File:</b> <code>{html.escape(report.filename)}</code>")
+    lines.append(f"<b>🗂️ Tipe:</b> <code>{html.escape(report.description)}</code>")
+    lines.append(f"<b>🏷️ Kategori CTF:</b> <code>{html.escape(report.category.upper())}</code>")
+    lines.append(f"<b>📊 Ukuran:</b> <code>{report.size:,} bytes</code>")
+    lines.append("")
+    lines.append(f"<b>🔑 MD5:</b> <code>{report.md5}</code>")
+    lines.append(f"<b>🔑 SHA256:</b> <code>{report.sha256[:32]}...</code>")
+    lines.append(f"<b>⚡ Entropy:</b> <code>{report.entropy:.4f}/8.0</code> — {html.escape(report.entropy_desc)}")
+
+    if report.checksec:
+        c = report.checksec
+        lines.append("")
+        lines.append("<b>🛡️ Checksec (Native ELF):</b>")
+        lines.append(f"  Arch: <code>{c.arch} {c.bits}-bit {c.endian}-endian</code>")
+        nx_icon = "✅" if c.nx else "❌"
+        pie_icon = "✅" if c.pie else "❌"
+        canary_icon = "✅" if c.canary else "❌"
+        stripped_icon = "⚠️" if c.stripped else "🔍"
+        lines.append(f"  NX: {nx_icon}  PIE: {pie_icon}  Canary: {canary_icon}")
+        lines.append(f"  RELRO: <code>{c.relro}</code>  Stripped: {stripped_icon} {'Ya' if c.stripped else 'Tidak (simbol tersedia)'}")
+
+    if report.flags_found:
+        lines.append("")
+        lines.append("🚩 <b>FLAG DITEMUKAN (Native Hunter):</b>")
+        for flag in report.flags_found[:5]:
+            lines.append(f"  🎯 <b><code>{html.escape(flag)}</code></b>")
+
+    if report.stego_indicators:
+        lines.append("")
+        lines.append("🕵️ <b>Indikator Steganografi:</b>")
+        for ind in report.stego_indicators[:3]:
+            lines.append(f"  ⚠️ {html.escape(ind)}")
+
+    if report.embedded_files:
+        lines.append("")
+        lines.append("📦 <b>File Tersembunyi / Embedded:</b>")
+        for emb in report.embedded_files[:3]:
+            lines.append(f"  📎 {html.escape(emb)}")
+
+    interesting_strings = [
+        s for s in report.strings_sample
+        if any(kw in s.lower() for kw in ["flag", "ctf", "pass", "secret", "key", "correct", "wrong", "ncs", "enter"])
+    ]
+    if interesting_strings:
+        lines.append("")
+        lines.append("💬 <b>Strings Menarik:</b>")
+        for s in interesting_strings[:6]:
+            lines.append(f"  » <code>{html.escape(s[:120])}</code>")
+
+    if report.recommended_tools:
+        lines.append("")
+        lines.append("🛠️ <b>Rekomendasi Tools:</b>")
+        for tool, cmd in report.recommended_tools[:4]:
+            lines.append(f"  • <b>{html.escape(tool)}:</b> <code>{html.escape(cmd[:100])}</code>")
+
+    return "\n".join(lines)
+
+
+# =====================================================================
 # UI HELPERS & KEYBOARDS
 # =====================================================================
 
@@ -694,16 +792,16 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ai = AIOrchestrator()
 
         sys_prompt = (
-            "Anda adalah Principal Security Researcher, Expert CTF Solver, dan Senior SOC L3 Analyst.\n"
-            "Tugas: Analisis teks/payload/string yang diberikan secara mendalam dan profesional.\n\n"
+            "Anda adalah Principal Security Researcher, CTF Analyst, dan Senior SOC L3 Analyst.\n"
+            "Tugas: Analisis teks/payload/string yang diberikan secara mendalam dan profesional. Anda TIDAK BERTUGAS untuk menyerang, melainkan MENGANTARKAN analis ke tool lanjutan yang relevan.\n\n"
             "Berikan laporan MARKDOWN dengan format:\n"
             "1. 🎯 **KLASIFIKASI**: Jenis ancaman/soal/payload (SQLi, XSS, LFI, CVE, Hash, Crypto, dsb.)\n"
             "2. 🔍 **ANALISIS TEKNIS MENDALAM**: Bedah cara kerja, sub-teknik, dan potensi dampak.\n"
-            "3. 🛠️ **TOOLS & PERINTAH EXACT VPS**: Command siap pakai di VPS Linux untuk investigasi/eksploitasi.\n"
-            "4. ⚡ **LANGKAH SOLUSI / EKSPLOITASI**: Urutan tindakan konkret untuk menyelesaikan soal atau insiden.\n"
+            "3. 🛠️ **TOOLS & PERINTAH EXACT VPS**: Command siap pakai di VPS Linux untuk investigasi lanjutan. Optimalkan tool secara detail.\n"
+            "4. ⚡ **REKOMENDASI SOLUSI**: Urutan tindakan konkret untuk menyelesaikan investigasi/insiden, BUKAN untuk melakukan eksploitasi sendiri.\n"
             "5. 🛡️ **MITRE ATT&CK & MITIGASI SOC**: Teknik MITRE, deteksi SIEM, dan rekomendasi pencegahan.\n\n"
             "ATURAN MUTLAK: DILARANG KERAS MENGARANG, MENGHALUSINASIKAN, ATAU BERASUMSI. "
-            "Hanya buat pernyataan berdasarkan fakta teknis yang nyata."
+            "Jangan buang token AI untuk mensimulasikan eksploitasi yang tidak nyata."
         )
 
         # Dapatkan hasil decode
@@ -2123,17 +2221,40 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         # File biner, arsip, gambar, atau artefak CTF lainnya
+        # ── STEP 1: Native Deep Analysis (Flag Hunter, Checksec, Strings, Entropy) ──
+        native_report = None
+        native_flags: list[str] = []
+        native_card = ""
+        try:
+            from kiibot.analysis.file_analyzer import analyze_file
+            native_report = await asyncio.get_event_loop().run_in_executor(None, analyze_file, file_path)
+            native_flags = native_report.flags_found if native_report else []
+            native_card = _format_native_analysis_card(native_report)
+            category_hint = native_report.category if native_report else "misc"
+        except Exception as e_native:
+            logger.warning(f"Native file analysis gagal: {e_native}")
+            category_hint = "misc"
+
+        # ── STEP 2: AI Tool Selection + Concurrent External Tools ──
         ai = AIOrchestrator()
         await status_card.edit_text(
-            f"<b>[ ORCHESTRATING TOOLS ]</b>\n"
+            f"<b>[ KIIBOT FILE INTELLIGENCE ]</b>\n"
             f"» <b>File:</b> <code>{html.escape(file_name)}</code>\n"
-            f"<code>STATUS: [2/3] Memilih tools paralel...</code>",
+            f"<code>STATUS: [2/4] Native analysis selesai. Memilih tools VPS...</code>",
             parse_mode="HTML"
         )
 
-        assessment = await ai.assess_challenge(text_context="Pecahkan berkas CTF ini secara mendalam", file_name=file_name)
-        category = assessment.get("category", "Unknown")
+        assessment = await ai.assess_challenge(
+            text_context=f"Pecahkan berkas CTF ini secara mendalam. Kategori native: {category_hint}",
+            file_name=file_name
+        )
+        category = assessment.get("category", category_hint)
         tools_to_run = assessment.get("tools", ["file", "strings", "binwalk", "hexdump"])
+
+        # Pastikan 'file' dan 'strings' selalu dijalankan untuk binary
+        for must_have in ["file", "strings"]:
+            if must_have not in tools_to_run:
+                tools_to_run.insert(0, must_have)
 
         tools_display = ", ".join([f"<code>{t}</code>" for t in tools_to_run])
         await status_card.edit_text(
@@ -2141,22 +2262,71 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"» <b>File:</b> <code>{html.escape(file_name)}</code>\n"
             f"» <b>Kategori:</b> <code>{html.escape(category)}</code>\n"
             f"» <b>Tools :</b> {tools_display}\n\n"
-            f"<code>STATUS: [3/3] Menjalankan tools secara bersamaan...</code>",
+            f"<code>STATUS: [3/4] Menjalankan {len(tools_to_run)} tools secara bersamaan...</code>",
             parse_mode="HTML"
         )
 
         tool_results = await execute_concurrent_tools(tools_to_run, file_path)
+
+        # ── STEP 3: Ekstrak flag dari SEMUA output tools (strings, file, dll) ──
+        tool_flags = _extract_flags_from_all_sources(tool_results)
+        all_flags = sorted(set(native_flags + tool_flags))
+
+        await status_card.edit_text(
+            f"<b>[ SYNTHESIZING INTELLIGENCE ]</b>\n"
+            f"» <b>File:</b> <code>{html.escape(file_name)}</code>\n"
+            f"» <b>Flags Ditemukan:</b> <code>{len(all_flags)} flag(s)</code>\n\n"
+            f"<code>STATUS: [4/4] AI menyusun laporan CTF/SOC...</code>",
+            parse_mode="HTML"
+        )
+
+        # ── STEP 4: AI Analysis (dengan graceful fallback jika API error) ──
         try:
-            final_report = await ai.analyze_results(tool_results, previous_context=f"Kategori: {category}, File: {file_name}")
+            final_report = await ai.analyze_results(
+                tool_results,
+                previous_context=(
+                    f"Kategori: {category}, File: {file_name}. "
+                    f"Flag ditemukan: {all_flags if all_flags else 'Belum ditemukan'}. "
+                    f"Entropy: {native_report.entropy if native_report else 'N/A'}, "
+                    f"Checksec: {vars(native_report.checksec) if native_report and native_report.checksec else 'N/A'}"
+                )
+            )
         except Exception as e_ai:
             logger.warning(f"AI analysis gagal ({e_ai}), menggunakan fallback report")
             final_report = _build_fallback_report(tool_results, file_name, f"File Analysis ({category})")
 
-        # Selalu simpan file laporan resmi (.md)
+        # ── STEP 5: Kirim Kartu Analisis Native + Flag Summary ──
+        if native_card:
+            try:
+                await update.message.reply_text(native_card, parse_mode="HTML")
+            except Exception as e_card:
+                logger.warning(f"Gagal kirim native card: {e_card}")
+
+        # Tampilkan flag yang ditemukan secara eksplisit jika ada
+        if all_flags:
+            flag_msg = "🚩 <b>[ FLAG(S) DITEMUKAN! ]</b>\n\n"
+            for i, flag in enumerate(all_flags, 1):
+                flag_msg += f"<b>#{i}:</b> <code>{html.escape(flag)}</code>\n"
+            try:
+                await update.message.reply_text(flag_msg, parse_mode="HTML")
+            except Exception:
+                pass
+
+        # ── STEP 6: Simpan & Kirim Laporan Lengkap ──
         report_path = f"{file_path}_SOC_Report.md"
         with open(report_path, "w", encoding="utf-8") as f:
             f.write(f"# KIIBOT SOC & CTF ANALYSIS REPORT: {file_name}\n")
             f.write(f"Category: {category}\n\n")
+            if all_flags:
+                f.write("## FLAGS DITEMUKAN\n")
+                for flag in all_flags:
+                    f.write(f"- `{flag}`\n")
+                f.write("\n")
+            if native_card:
+                import re as _re
+                f.write("## NATIVE FILE ANALYSIS\n")
+                f.write(_re.sub(r"<[^>]+>", "", native_card))
+                f.write("\n\n")
             f.write(final_report)
             f.write("\n\n---\n## RAW TOOLS OUTPUT DUMP\n\n")
             f.writelines(f"### TOOL: {tname.upper()}\n```\n{tout}\n```\n\n" for tname, tout in tool_results.items())
@@ -2166,7 +2336,7 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"<b>[ KIIBOT SOC & CTF INCIDENT REPORT ]</b>\n"
                 f"» <b>File:</b> <code>{html.escape(file_name)}</code>\n"
                 f"» <b>Kategori:</b> <code>{html.escape(category)}</code>\n\n"
-                f"✅ <i>Analisis selesai. Laporan lengkap dan mitigasi SOC terlampir di bawah (.md).</i>",
+                f"✅ <i>Analisis selesai. Laporan lengkap terlampir di bawah (.md).</i>",
                 parse_mode="HTML"
             )
         else:
@@ -2176,7 +2346,6 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 parse_mode="HTML"
             )
 
-        # Kirim dokumen laporan resmi ke Telegram
         with open(report_path, "rb") as doc:
             await update.message.reply_document(
                 document=doc,
@@ -2255,10 +2424,56 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 for tname, tout in stego_results.items():
                     stego_summary += f"🔹 <b>{tname}:</b> <code>{html.escape(str(tout)[:200])}</code>\n"
 
-            await status_card.edit_text(
-                _escape_ai_report(vision_report) + stego_summary,
-                parse_mode="HTML"
-            )
+            # Cek apakah ada error dari API (HTTP 500 dll.) - tetap tampilkan hasil tools lokal
+            vision_ok = "[ERROR]" not in vision_report and "Terjadi kesalahan" not in vision_report
+
+            if vision_ok:
+                await status_card.edit_text(
+                    _escape_ai_report(vision_report) + stego_summary,
+                    parse_mode="HTML"
+                )
+            else:
+                # AI Vision error (500/quota) — fallback ke tools lokal + tampilkan pesan informatif
+                logger.warning(f"AI Vision error, fallback ke tools lokal: {vision_report[:100]}")
+                await status_card.edit_text(
+                    "<b>[ STEGO & IMAGE ANALYSIS ]</b>\n"
+                    "<i>⚠️ AI Vision tidak tersedia saat ini. Menjalankan tools lokal...</i>\n\n"
+                    "» <b>Tools:</b> <code>exiftool, strings, binwalk, zsteg, steghide</code>\n"
+                    "<code>STATUS: [3/3] Memeriksa metadata, LSB, & embedded files...</code>",
+                    parse_mode="HTML"
+                )
+                stego_tools = ["exiftool", "strings", "binwalk", "zsteg", "steghide"]
+                tool_results = await execute_concurrent_tools(stego_tools, file_path)
+
+                # Ekstrak flag dari hasil tools
+                found_flags = _extract_flags_from_all_sources(tool_results)
+
+                # Native analysis untuk gambar
+                try:
+                    from kiibot.analysis.file_analyzer import analyze_file
+                    native_rep = await asyncio.get_event_loop().run_in_executor(None, analyze_file, file_path)
+                    native_card = _format_native_analysis_card(native_rep)
+                    found_flags = sorted(set(found_flags + native_rep.flags_found))
+                except Exception:
+                    native_card = ""
+
+                if native_card:
+                    await update.message.reply_text(native_card, parse_mode="HTML")
+
+                if found_flags:
+                    flag_msg = "🚩 <b>[ FLAG DITEMUKAN! ]</b>\n\n"
+                    for i, flag in enumerate(found_flags, 1):
+                        flag_msg += f"<b>#{i}:</b> <code>{html.escape(flag)}</code>\n"
+                    await update.message.reply_text(flag_msg, parse_mode="HTML")
+
+                tools_report = "<b>🖼️ Hasil Ekstraksi Tools Gambar (VPS):</b>\n\n"
+                for tname, tout in tool_results.items():
+                    if not tname.startswith("_meta_"):
+                        tools_report += f"🔹 <b>{html.escape(tname)}:</b>\n<code>{html.escape(str(tout)[:300])}</code>\n\n"
+                try:
+                    await status_card.edit_text(tools_report, parse_mode="HTML")
+                except Exception:
+                    await update.message.reply_text(tools_report, parse_mode="HTML")
         else:
             # Fallback jika AI belum aktif: Jalankan tools stego lokal di VPS
             await status_card.edit_text(
@@ -2268,9 +2483,28 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 parse_mode="HTML"
             )
             tool_results = await execute_concurrent_tools(["exiftool", "strings", "binwalk", "zsteg", "steghide"], file_path)
+
+            # Native analysis
+            found_flags: list[str] = []
+            try:
+                from kiibot.analysis.file_analyzer import analyze_file
+                native_rep = await asyncio.get_event_loop().run_in_executor(None, analyze_file, file_path)
+                native_card = _format_native_analysis_card(native_rep)
+                found_flags = sorted(set(native_rep.flags_found + _extract_flags_from_all_sources(tool_results)))
+                await update.message.reply_text(native_card, parse_mode="HTML")
+            except Exception:
+                found_flags = _extract_flags_from_all_sources(tool_results)
+
+            if found_flags:
+                flag_msg = "🚩 <b>[ FLAG DITEMUKAN! ]</b>\n\n"
+                for i, flag in enumerate(found_flags, 1):
+                    flag_msg += f"<b>#{i}:</b> <code>{html.escape(flag)}</code>\n"
+                await update.message.reply_text(flag_msg, parse_mode="HTML")
+
             report = "<b>🖼️ Hasil Ekstraksi Tools Gambar (VPS):</b>\n\n"
             for tname, tout in tool_results.items():
-                report += f"🔹 <b>{tname}:</b> <code>{html.escape(str(tout)[:300])}</code>\n\n"
+                if not tname.startswith("_meta_"):
+                    report += f"🔹 <b>{html.escape(tname)}:</b>\n<code>{html.escape(str(tout)[:300])}</code>\n\n"
             await status_card.edit_text(report, parse_mode="HTML")
 
     except Exception as e:
